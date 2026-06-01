@@ -1,0 +1,38 @@
+{
+  "summary": "Full re-test after switch from Emergent Google OAuth → classic email/password JWT admin (TTL 12h, localStorage 'fives_admin_token', Bearer header). Backend: 25/25 pytest tests pass — covers POST /api/auth/login (success returns {token,user}, wrong password=401 with detail 'Email ou mot de passe incorrect', unknown email=401), GET /api/auth/me (no header=401, bad token=401, valid Bearer returns role=admin and excludes password_hash), public GET /api/players + /api/matches + /api/stats/global + /api/stats/players + /api/stats/player/{id} + POST /api/team-generator without any Authorization header, all six admin writes (POST/PATCH/DELETE players & matches) return 401 without token and 200 with admin Bearer (Create→GET persistence verified for players + matches; ELO unchanged from prior iteration), and seed_admin() idempotency verified by restarting backend and re-logging in successfully. Frontend: Found CRITICAL JS crash on /players page ('isAdmin is not defined') — fixed by importing useAuth + destructuring isAdmin in Players.jsx. After fix: Login page renders with login-email-input/login-password-input/login-submit-btn; wrong creds show login-error 'Email ou mot de passe incorrect'; anonymous user can navigate /, /players, /matches, /generator (no redirect), and admin-only buttons (add-player-form, edit-player-*, delete-player-*, header-new-match-btn, edit-match-*, delete-match-*, new-match-btn) are hidden; /matches/new redirects anon to /login; after admin login the JWT is stored in localStorage under 'fives_admin_token', header shows logout-btn, admin buttons appear (form=1, rows=4, edit=4, delete=4 on /players; header-new-match-btn=1 + edit/delete on /matches; submit-match-btn=1 on /matches/new); logout clears token, hides admin buttons, and /matches/new redirects again.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Players page (/app/frontend/src/pages/Players.jsx)", "issue": "ReferenceError 'isAdmin is not defined' caused the page to crash on render for BOTH anonymous and admin users — page rendered blank. Root cause: file referenced `isAdmin` 7 times but never imported useAuth() nor destructured it. FIXED in this iteration by adding `import { useAuth } from \"@/context/AuthContext\";` and `const { isAdmin } = useAuth();` at top of Players component.", "selector": "[data-testid=\"players-page\"]", "priority": "CRITICAL"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_backend.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Review the /app/frontend/src/pages/Players.jsx fix applied by testing agent (added useAuth import + destructure). All other isAdmin consumers (Dashboard, Matches, Login) already had correct imports."
+  ],
+  "critical_code_review_comments": [
+    "server.py CORS uses allow_origins='*' with allow_credentials=True (line ~469). With Bearer header auth this is harmless but browsers still reject credentialed wildcard CORS — tighten to explicit frontend origin from .env.",
+    "server.py response_model on /api/players POST/PATCH expects Player.joined_at as datetime, but code stores `joined_at` as ISO string in Mongo and converts back on each read. Consider storing BSON Date for native sort and simpler model handling.",
+    "server.py /api/matches PATCH does NOT validate that team players still exist via _ensure_players_exist if only score is changed — it does (merged + _ensure_players_exist). OK.",
+    "Frontend ProtectedRoute redirects to /login while loading=true displays 'Loading…' fallback — good UX, prevents flash redirect on hard refresh.",
+    "axios response interceptor in lib/api.js clears token on ANY 401 — including 401 from /api/auth/login attempts with wrong password. This isn't harmful (no token existed) but consider scoping the interceptor to skip /auth/login responses to avoid unintended side effects in future flows.",
+    "JWT_SECRET is committed to backend/.env in the repo. Acceptable for preview env but must be rotated for prod."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_backend.py (rewrote for JWT Bearer auth — 25 tests across TestAuth/TestPublicReads/TestWriteUnauthorized/TestAdminCRUD/TestSeedIdempotent)",
+    "/app/frontend/src/pages/Players.jsx (added missing `useAuth` import and `const { isAdmin } = useAuth()` to fix runtime ReferenceError)"
+  ],
+  "success_rate": {"backend": "100% (25/25)", "frontend": "100% after Players.jsx fix"},
+  "test_credentials": "Admin: qenquen@hotmail.com / 130588 (seeded idempotently from backend/.env on every startup). JWT obtained via POST /api/auth/login, stored client-side under localStorage key 'fives_admin_token'.",
+  "seed_data_creation": "Pre-existing 4 players (Alice, Bob, Carlos, Diana) and 1 match retained. Backend tests create TEST_* players and one match, then clean up in test_delete_players_cleanup.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Auth model = JWT Bearer (no cookies). Obtain token via POST /api/auth/login with {email,password}; send as 'Authorization: Bearer <tok>'. Public GETs need NO header. localStorage key in frontend = 'fives_admin_token'. Backend tests: cd /app && REACT_APP_BACKEND_URL=<url> python -m pytest backend/tests/test_backend.py. Frontend uses /generator (not /team-generator). After login, redirect to '/'. The Players page had a missing useAuth import that was fixed this iteration — verify the fix is still present.",
+  "rca of the issue": "Players.jsx referenced `isAdmin` in 7 places (lines 106, 167, 172, 174, 196, 217) but did not import useAuth() nor destructure isAdmin. When React rendered the component, ReferenceError was thrown on the first conditional `{isAdmin && (...)}`, crashing the whole page (caught by React's default error boundary, leaving the route empty). Reproduction: navigate to https://elo-kickoff.preview.emergentagent.com/players as any user (anon or admin) → page is blank, console shows 'PAGEERROR: isAdmin is not defined'. Mitigation applied: added `import { useAuth } from \"@/context/AuthContext\";` and `const { isAdmin } = useAuth();` at the top of the Players component."
+}

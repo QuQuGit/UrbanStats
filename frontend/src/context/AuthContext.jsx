@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { api } from "@/lib/api";
+import { api, getToken, setToken } from "@/lib/api";
 
 const AuthContext = createContext(null);
 
@@ -8,36 +8,45 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   const checkAuth = useCallback(async () => {
+    if (!getToken()) {
+      setUser(null);
+      setLoading(false);
+      return;
+    }
     try {
       const { data } = await api.get("/auth/me");
       setUser(data);
-    } catch (e) {
+    } catch (_) {
       setUser(null);
+      setToken(null);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    // CRITICAL: If returning from OAuth callback, skip the /me check.
-    // AuthCallback will exchange the session_id and establish the session first.
-    if (typeof window !== "undefined" && window.location.hash?.includes("session_id=")) {
-      setLoading(false);
-      return;
-    }
     checkAuth();
   }, [checkAuth]);
+
+  const login = useCallback(async (email, password) => {
+    const { data } = await api.post("/auth/login", { email, password });
+    setToken(data.token);
+    setUser(data.user);
+    return data.user;
+  }, []);
 
   const logout = useCallback(async () => {
     try {
       await api.post("/auth/logout");
     } catch (_) {}
+    setToken(null);
     setUser(null);
-    window.location.href = "/login";
   }, []);
 
+  const isAdmin = Boolean(user && user.role === "admin");
+
   return (
-    <AuthContext.Provider value={{ user, setUser, loading, checkAuth, logout }}>
+    <AuthContext.Provider value={{ user, isAdmin, loading, login, logout, checkAuth }}>
       {children}
     </AuthContext.Provider>
   );

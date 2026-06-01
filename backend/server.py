@@ -1,6 +1,10 @@
 """FastAPI backend for Football 5v5 Statistics Platform.
 
-REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
+Auth model:
+- Single admin (email/password), JWT Bearer in Authorization header.
+- All GET endpoints are PUBLIC.
+- All write endpoints (POST/PATCH/DELETE on players + matches) require admin.
+- Team generator is PUBLIC (read-only computation).
 """
 from __future__ import annotations
 
@@ -11,19 +15,18 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional, List
 
-import requests
-from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends, Cookie, Header
-from fastapi.responses import JSONResponse
+import bcrypt
+import jwt
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Depends, Header
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 
 from stats import (
     INITIAL_ELO,
     replay_matches,
     generate_balanced_teams,
-    best_duos,
     best_teammates_for,
     worst_opponents_for,
 )
@@ -35,6 +38,10 @@ mongo_url = os.environ["MONGO_URL"]
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ["DB_NAME"]]
 
+JWT_SECRET = os.environ["JWT_SECRET"]
+JWT_ALGO = "HS256"
+ACCESS_TTL_HOURS = 12
+
 app = FastAPI(title="Football 5v5 Stats API")
 api = APIRouter(prefix="/api")
 
@@ -43,18 +50,57 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 
 
 # ---------------------------------------------------------------------------
+# Auth helpers
+# ---------------------------------------------------------------------------
+def hash_password(pw: str) -> str:
+    return bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
+
+
+def verify_password(pw: str, hashed: str) -> bool:
+    try:
+        return bcrypt.checkpw(pw.encode(), hashed.encode())
+    except Exception:
+        return False
+
+
+def create_access_token(user_id: str, email: str) -> str:
+    payload = {
+        "sub": user_id,
+        "email": email,
+        "role": "admin",
+        "exp": datetime.now(timezone.utc) + timedelta(hours=ACCESS_TTL_HOURS),
+        "type": "access",
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGO)
+
+
+async def get_optional_user(authorization: Optional[str] = Header(default=None)) -> Optional[dict]:
+    if not authorization or not authorization.lower().startswith("bearer "):
+        return None
+    token = authorization.split(" ", 1)[1].strip()
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGO])
+        if payload.get("type") != "access":
+            return None
+        user = await db.users.find_one({"user_id": payload["sub"]}, {"_id": 0, "password_hash": 0})
+        return user
+    except jwt.PyJWTError:
+        return None
+
+
+async def require_admin(authorization: Optional[str] = Header(default=None)) -> dict:
+    user = await get_optional_user(authorization)
+    if not user or user.get("role") != "admin":
+        raise HTTPException(status_code=401, detail="Admin authentication required")
+    return user
+
+
+# ---------------------------------------------------------------------------
 # Models
 # ---------------------------------------------------------------------------
-class User(BaseModel):
-    user_id: str
-    email: str
-    name: str
-    picture: Optional[str] = None
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-
-class SessionInput(BaseModel):
-    session_id: str
+class LoginInput(BaseModel):
+    email: EmailStr
+    password: str
 
 
 class PlayerCreate(BaseModel):
@@ -75,7 +121,7 @@ class Player(BaseModel):
 
 
 class MatchCreate(BaseModel):
-    date: str  # ISO date
+    date: str
     team_a: List[str]
     team_b: List[str]
     score_a: int
@@ -90,129 +136,40 @@ class MatchUpdate(BaseModel):
     score_b: Optional[int] = None
 
 
-class Match(BaseModel):
-    id: str
-    date: str
-    team_a: List[str]
-    team_b: List[str]
-    score_a: int
-    score_b: int
-    created_at: datetime
-
-
 class TeamGenInput(BaseModel):
     player_ids: List[str]
-    strategy: str = "best"  # 'best' | 'competitive' | 'random_fair'
-
-
-# ---------------------------------------------------------------------------
-# Auth helpers (Emergent-managed Google Auth)
-# ---------------------------------------------------------------------------
-EMERGENT_SESSION_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
-SESSION_COOKIE_NAME = "session_token"
-
-
-async def _get_session_token(
-    request: Request,
-    authorization: Optional[str] = Header(default=None),
-) -> Optional[str]:
-    """Read session_token from cookie first, then Authorization header."""
-    token = request.cookies.get(SESSION_COOKIE_NAME)
-    if token:
-        return token
-    if authorization and authorization.lower().startswith("bearer "):
-        return authorization.split(" ", 1)[1].strip()
-    return None
-
-
-async def require_user(
-    request: Request,
-    authorization: Optional[str] = Header(default=None),
-) -> dict:
-    token = await _get_session_token(request, authorization)
-    if not token:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    session = await db.user_sessions.find_one({"session_token": token}, {"_id": 0})
-    if not session:
-        raise HTTPException(status_code=401, detail="Invalid session")
-    expires_at = session["expires_at"]
-    if isinstance(expires_at, str):
-        expires_at = datetime.fromisoformat(expires_at)
-    if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
-    if expires_at < datetime.now(timezone.utc):
-        raise HTTPException(status_code=401, detail="Session expired")
-    user = await db.users.find_one({"user_id": session["user_id"]}, {"_id": 0})
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-    return user
+    strategy: str = "best"
 
 
 # ---------------------------------------------------------------------------
 # Auth routes
 # ---------------------------------------------------------------------------
-@api.post("/auth/session")
-async def auth_session(payload: SessionInput, response: Response):
-    """Exchange session_id from Emergent for our session cookie."""
-    headers = {"X-Session-ID": payload.session_id}
-    try:
-        resp = requests.get(EMERGENT_SESSION_URL, headers=headers, timeout=10)
-    except requests.RequestException as e:
-        raise HTTPException(status_code=502, detail=f"Auth provider unreachable: {e}")
-    if resp.status_code != 200:
-        raise HTTPException(status_code=401, detail="Invalid session_id")
-    data = resp.json()
-    email = data["email"]
-    existing = await db.users.find_one({"email": email}, {"_id": 0})
-    if existing:
-        user_id = existing["user_id"]
-        await db.users.update_one(
-            {"user_id": user_id},
-            {"$set": {"name": data.get("name", existing.get("name")), "picture": data.get("picture")}},
-        )
-    else:
-        user_id = f"user_{uuid.uuid4().hex[:12]}"
-        await db.users.insert_one({
-            "user_id": user_id,
-            "email": email,
-            "name": data.get("name", email),
-            "picture": data.get("picture"),
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        })
-
-    session_token = data["session_token"]
-    expires_at = datetime.now(timezone.utc) + timedelta(days=7)
-    await db.user_sessions.insert_one({
-        "user_id": user_id,
-        "session_token": session_token,
-        "expires_at": expires_at.isoformat(),
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    })
-
-    response.set_cookie(
-        key=SESSION_COOKIE_NAME,
-        value=session_token,
-        max_age=7 * 24 * 3600,
-        httponly=True,
-        secure=True,
-        samesite="none",
-        path="/",
-    )
-    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
-    return {"user": user}
+@api.post("/auth/login")
+async def auth_login(payload: LoginInput):
+    email = payload.email.lower().strip()
+    user = await db.users.find_one({"email": email})
+    if not user or not verify_password(payload.password, user.get("password_hash", "")):
+        raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
+    token = create_access_token(user["user_id"], email)
+    return {
+        "token": token,
+        "user": {
+            "user_id": user["user_id"],
+            "email": user["email"],
+            "name": user.get("name", "Admin"),
+            "role": user.get("role", "admin"),
+        },
+    }
 
 
 @api.get("/auth/me")
-async def auth_me(user: dict = Depends(require_user)):
+async def auth_me(user: dict = Depends(require_admin)):
     return user
 
 
 @api.post("/auth/logout")
-async def auth_logout(request: Request, response: Response, authorization: Optional[str] = Header(default=None)):
-    token = await _get_session_token(request, authorization)
-    if token:
-        await db.user_sessions.delete_one({"session_token": token})
-    response.delete_cookie(SESSION_COOKIE_NAME, path="/", samesite="none", secure=True)
+async def auth_logout():
+    # Stateless JWT: client just discards the token.
     return {"ok": True}
 
 
@@ -220,9 +177,10 @@ async def auth_logout(request: Request, response: Response, authorization: Optio
 # Players
 # ---------------------------------------------------------------------------
 @api.get("/players", response_model=List[Player])
-async def list_players(user: dict = Depends(require_user)):
+async def list_players():
     docs = await db.players.find({}, {"_id": 0}).to_list(1000)
     for d in docs:
+        d.pop("name_lc", None)
         if isinstance(d.get("joined_at"), str):
             d["joined_at"] = datetime.fromisoformat(d["joined_at"])
     docs.sort(key=lambda p: p["name"].lower())
@@ -230,13 +188,13 @@ async def list_players(user: dict = Depends(require_user)):
 
 
 @api.post("/players", response_model=Player)
-async def create_player(payload: PlayerCreate, user: dict = Depends(require_user)):
+async def create_player(payload: PlayerCreate, _: dict = Depends(require_admin)):
     name = payload.name.strip()
     if not name:
-        raise HTTPException(status_code=400, detail="Name required")
+        raise HTTPException(status_code=400, detail="Nom requis")
     existing = await db.players.find_one({"name_lc": name.lower()}, {"_id": 0})
     if existing:
-        raise HTTPException(status_code=409, detail="Player with same name already exists")
+        raise HTTPException(status_code=409, detail="Un joueur avec ce nom existe déjà")
     pid = f"plr_{uuid.uuid4().hex[:10]}"
     now = datetime.now(timezone.utc)
     doc = {
@@ -254,15 +212,15 @@ async def create_player(payload: PlayerCreate, user: dict = Depends(require_user
 
 
 @api.patch("/players/{pid}", response_model=Player)
-async def update_player(pid: str, payload: PlayerUpdate, user: dict = Depends(require_user)):
+async def update_player(pid: str, payload: PlayerUpdate, _: dict = Depends(require_admin)):
     existing = await db.players.find_one({"id": pid}, {"_id": 0})
     if not existing:
-        raise HTTPException(status_code=404, detail="Player not found")
+        raise HTTPException(status_code=404, detail="Joueur introuvable")
     update = {}
     if payload.name is not None:
         new_name = payload.name.strip()
         if not new_name:
-            raise HTTPException(status_code=400, detail="Name required")
+            raise HTTPException(status_code=400, detail="Nom requis")
         update["name"] = new_name
         update["name_lc"] = new_name.lower()
     if payload.active is not None:
@@ -277,14 +235,13 @@ async def update_player(pid: str, payload: PlayerUpdate, user: dict = Depends(re
 
 
 @api.delete("/players/{pid}")
-async def delete_player(pid: str, user: dict = Depends(require_user)):
-    # Block delete if player has matches
+async def delete_player(pid: str, _: dict = Depends(require_admin)):
     has_matches = await db.matches.find_one({"$or": [{"team_a": pid}, {"team_b": pid}]})
     if has_matches:
-        raise HTTPException(status_code=409, detail="Cannot delete: player has matches. Set inactive instead.")
+        raise HTTPException(status_code=409, detail="Suppression impossible : ce joueur a des matches. Désactivez-le.")
     res = await db.players.delete_one({"id": pid})
     if res.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Player not found")
+        raise HTTPException(status_code=404, detail="Joueur introuvable")
     return {"ok": True}
 
 
@@ -293,16 +250,16 @@ async def delete_player(pid: str, user: dict = Depends(require_user)):
 # ---------------------------------------------------------------------------
 def _validate_match_payload(team_a: List[str], team_b: List[str], score_a: int, score_b: int):
     if not team_a or not team_b:
-        raise HTTPException(status_code=400, detail="Both teams must have players")
+        raise HTTPException(status_code=400, detail="Les deux équipes doivent contenir des joueurs")
     if len(team_a) != len(team_b):
-        raise HTTPException(status_code=400, detail="Teams must have the same number of players")
+        raise HTTPException(status_code=400, detail="Les équipes doivent contenir le même nombre de joueurs")
     if len(set(team_a)) != len(team_a) or len(set(team_b)) != len(team_b):
-        raise HTTPException(status_code=400, detail="Duplicate player in a team")
+        raise HTTPException(status_code=400, detail="Joueur en double dans une équipe")
     overlap = set(team_a) & set(team_b)
     if overlap:
-        raise HTTPException(status_code=400, detail="A player cannot be in both teams")
+        raise HTTPException(status_code=400, detail="Un joueur ne peut pas être dans les deux équipes")
     if score_a < 0 or score_b < 0:
-        raise HTTPException(status_code=400, detail="Scores must be non-negative")
+        raise HTTPException(status_code=400, detail="Les scores doivent être positifs")
 
 
 async def _ensure_players_exist(ids: List[str]):
@@ -312,18 +269,18 @@ async def _ensure_players_exist(ids: List[str]):
     found = {d["id"] async for d in cursor}
     missing = [pid for pid in ids if pid not in found]
     if missing:
-        raise HTTPException(status_code=400, detail=f"Unknown player ids: {missing}")
+        raise HTTPException(status_code=400, detail=f"Joueurs inconnus : {missing}")
 
 
 @api.get("/matches")
-async def list_matches(user: dict = Depends(require_user)):
+async def list_matches():
     docs = await db.matches.find({}, {"_id": 0}).to_list(5000)
     docs.sort(key=lambda m: m.get("date", ""), reverse=True)
     return docs
 
 
 @api.post("/matches")
-async def create_match(payload: MatchCreate, user: dict = Depends(require_user)):
+async def create_match(payload: MatchCreate, _: dict = Depends(require_admin)):
     _validate_match_payload(payload.team_a, payload.team_b, payload.score_a, payload.score_b)
     await _ensure_players_exist(payload.team_a + payload.team_b)
     mid = f"mat_{uuid.uuid4().hex[:10]}"
@@ -342,10 +299,10 @@ async def create_match(payload: MatchCreate, user: dict = Depends(require_user))
 
 
 @api.patch("/matches/{mid}")
-async def update_match(mid: str, payload: MatchUpdate, user: dict = Depends(require_user)):
+async def update_match(mid: str, payload: MatchUpdate, _: dict = Depends(require_admin)):
     existing = await db.matches.find_one({"id": mid}, {"_id": 0})
     if not existing:
-        raise HTTPException(status_code=404, detail="Match not found")
+        raise HTTPException(status_code=404, detail="Match introuvable")
     merged = {**existing}
     for key, val in payload.model_dump(exclude_unset=True).items():
         merged[key] = val
@@ -363,15 +320,15 @@ async def update_match(mid: str, payload: MatchUpdate, user: dict = Depends(requ
 
 
 @api.delete("/matches/{mid}")
-async def delete_match(mid: str, user: dict = Depends(require_user)):
+async def delete_match(mid: str, _: dict = Depends(require_admin)):
     res = await db.matches.delete_one({"id": mid})
     if res.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Match not found")
+        raise HTTPException(status_code=404, detail="Match introuvable")
     return {"ok": True}
 
 
 # ---------------------------------------------------------------------------
-# Stats
+# Stats (public)
 # ---------------------------------------------------------------------------
 async def _load_all() -> tuple[List[dict], List[dict]]:
     players = await db.players.find({}, {"_id": 0}).to_list(1000)
@@ -380,7 +337,7 @@ async def _load_all() -> tuple[List[dict], List[dict]]:
 
 
 @api.get("/stats/global")
-async def stats_global(user: dict = Depends(require_user)):
+async def stats_global():
     players, matches = await _load_all()
     total_goals = sum(m.get("score_a", 0) + m.get("score_b", 0) for m in matches)
     active = sum(1 for p in players if p.get("active", True))
@@ -393,7 +350,7 @@ async def stats_global(user: dict = Depends(require_user)):
 
 
 @api.get("/stats/players")
-async def stats_players(min_matches: int = 0, user: dict = Depends(require_user)):
+async def stats_players(min_matches: int = 0):
     players, matches = await _load_all()
     result = replay_matches(matches)
     stats = result["players"]
@@ -417,11 +374,11 @@ async def stats_players(min_matches: int = 0, user: dict = Depends(require_user)
 
 
 @api.get("/stats/player/{pid}")
-async def stats_player(pid: str, user: dict = Depends(require_user)):
+async def stats_player(pid: str):
     players, matches = await _load_all()
     player = next((p for p in players if p["id"] == pid), None)
     if not player:
-        raise HTTPException(status_code=404, detail="Player not found")
+        raise HTTPException(status_code=404, detail="Joueur introuvable")
     result = replay_matches(matches)
     s = result["players"].get(pid)
     if not s:
@@ -442,7 +399,6 @@ async def stats_player(pid: str, user: dict = Depends(require_user)):
     for o in opponents:
         o["name"] = name_by_id.get(o["player_id"], "?")
 
-    # Player's own match list
     own_matches = [m for m in matches if pid in m.get("team_a", []) or pid in m.get("team_b", [])]
     own_matches.sort(key=lambda m: m.get("date", ""), reverse=True)
 
@@ -456,9 +412,9 @@ async def stats_player(pid: str, user: dict = Depends(require_user)):
 
 
 @api.post("/team-generator")
-async def team_generator(payload: TeamGenInput, user: dict = Depends(require_user)):
+async def team_generator(payload: TeamGenInput):
     if len(payload.player_ids) < 2 or len(payload.player_ids) % 2 != 0:
-        raise HTTPException(status_code=400, detail="Provide an even number of players (>=2)")
+        raise HTTPException(status_code=400, detail="Sélectionnez un nombre pair de joueurs (>=2)")
     await _ensure_players_exist(payload.player_ids)
     _, matches = await _load_all()
     result = replay_matches(matches)
@@ -467,6 +423,39 @@ async def team_generator(payload: TeamGenInput, user: dict = Depends(require_use
     for strat in ("best", "competitive", "random_fair"):
         options.append(generate_balanced_teams(payload.player_ids, stats, strategy=strat))
     return {"options": options}
+
+
+# ---------------------------------------------------------------------------
+# Admin seeding (idempotent)
+# ---------------------------------------------------------------------------
+async def seed_admin():
+    admin_email = os.environ["ADMIN_EMAIL"].lower().strip()
+    admin_password = os.environ["ADMIN_PASSWORD"]
+    existing = await db.users.find_one({"email": admin_email})
+    if existing is None:
+        await db.users.insert_one({
+            "user_id": f"user_{uuid.uuid4().hex[:12]}",
+            "email": admin_email,
+            "name": "Admin",
+            "role": "admin",
+            "password_hash": hash_password(admin_password),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+        logger.info(f"Admin user seeded: {admin_email}")
+    elif not verify_password(admin_password, existing.get("password_hash", "")):
+        await db.users.update_one(
+            {"email": admin_email},
+            {"$set": {"password_hash": hash_password(admin_password), "role": "admin"}},
+        )
+        logger.info(f"Admin password updated: {admin_email}")
+    # Indexes
+    await db.users.create_index("email", unique=True)
+    await db.players.create_index("name_lc")
+
+
+@app.on_event("startup")
+async def on_startup():
+    await seed_admin()
 
 
 # ---------------------------------------------------------------------------

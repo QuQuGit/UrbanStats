@@ -3,8 +3,10 @@ import { Link } from "react-router-dom";
 import { api, apiError } from "@/lib/api";
 import { toast } from "sonner";
 import { Pencil, Trash2, PlusCircle } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
 export default function Matches() {
+  const { isAdmin } = useAuth();
   const [matches, setMatches] = useState([]);
   const [players, setPlayers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -54,9 +56,11 @@ export default function Matches() {
           <div className="label-overline">History</div>
           <h1 className="font-display text-4xl sm:text-5xl tracking-tighter font-black mt-2">Matches</h1>
         </div>
-        <Link to="/matches/new" className="btn-primary flex items-center gap-2" data-testid="new-match-btn">
-          <PlusCircle size={16} /> Nouveau match
-        </Link>
+        {isAdmin && (
+          <Link to="/matches/new" className="btn-primary flex items-center gap-2" data-testid="new-match-btn">
+            <PlusCircle size={16} /> Nouveau match
+          </Link>
+        )}
       </header>
 
       <input
@@ -75,14 +79,14 @@ export default function Matches() {
               <th className="px-4 py-3 font-medium">Team A</th>
               <th className="px-4 py-3 font-medium text-center">Score</th>
               <th className="px-4 py-3 font-medium">Team B</th>
-              <th className="px-4 py-3" />
+              {isAdmin && <th className="px-4 py-3" />}
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan="5" className="px-4 py-6 text-center text-[#888]">Loading…</td></tr>
+              <tr><td colSpan={isAdmin ? 5 : 4} className="px-4 py-6 text-center text-[#888]">Loading…</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan="5" className="px-4 py-6 text-center text-[#888]">Aucun match.</td></tr>
+              <tr><td colSpan={isAdmin ? 5 : 4} className="px-4 py-6 text-center text-[#888]">Aucun match.</td></tr>
             ) : (
               filtered.map((m) => {
                 const winner = m.score_a > m.score_b ? "A" : m.score_a < m.score_b ? "B" : "D";
@@ -100,16 +104,18 @@ export default function Matches() {
                     <td className={`px-4 py-3 ${winner === "B" ? "text-white" : "text-[#aaa]"}`}>
                       {m.team_b.map((id) => playersById[id]?.name || "?").join(", ")}
                     </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex justify-end gap-1">
-                        <Link to={`/matches/${m.id}/edit`} className="p-2 text-[#888] hover:text-white hover:bg-[#222] rounded" data-testid={`edit-match-${m.id}`}>
-                          <Pencil size={14} />
-                        </Link>
-                        <button onClick={() => remove(m)} className="p-2 text-[#888] hover:text-[#FF3B30] hover:bg-[#222] rounded" data-testid={`delete-match-${m.id}`}>
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </td>
+                    {isAdmin && (
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex justify-end gap-1">
+                          <Link to={`/matches/${m.id}/edit`} className="p-2 text-[#888] hover:text-white hover:bg-[#222] rounded" data-testid={`edit-match-${m.id}`}>
+                            <Pencil size={14} />
+                          </Link>
+                          <button onClick={() => remove(m)} className="p-2 text-[#888] hover:text-[#FF3B30] hover:bg-[#222] rounded" data-testid={`delete-match-${m.id}`}>
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 );
               })

@@ -3,8 +3,10 @@ import { Link } from "react-router-dom";
 import { api, apiError } from "@/lib/api";
 import { ArrowUpRight, Trophy, Target, Users as UsersIcon } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/context/AuthContext";
 
 export default function Dashboard() {
+  const { isAdmin } = useAuth();
   const [globalStats, setGlobalStats] = useState(null);
   const [players, setPlayers] = useState([]);
   const [matches, setMatches] = useState([]);
@@ -88,11 +90,17 @@ export default function Dashboard() {
       {players.length === 0 && (
         <div className="card-surface p-8 text-center">
           <div className="font-display text-2xl font-bold">Aucun joueur pour l'instant</div>
-          <p className="text-[#888] mt-2">Commencez par ajouter quelques joueurs, puis saisissez un match.</p>
-          <div className="mt-4 flex gap-2 justify-center">
-            <Link to="/players" className="btn-primary" data-testid="empty-add-player">Ajouter joueurs</Link>
-            <Link to="/matches/new" className="btn-secondary" data-testid="empty-add-match">Nouveau match</Link>
-          </div>
+          <p className="text-[#888] mt-2">
+            {isAdmin
+              ? "Commencez par ajouter quelques joueurs, puis saisissez un match."
+              : "L'admin n'a pas encore ajouté de joueurs."}
+          </p>
+          {isAdmin && (
+            <div className="mt-4 flex gap-2 justify-center">
+              <Link to="/players" className="btn-primary" data-testid="empty-add-player">Ajouter joueurs</Link>
+              <Link to="/matches/new" className="btn-secondary" data-testid="empty-add-match">Nouveau match</Link>
+            </div>
+          )}
         </div>
       )}
 

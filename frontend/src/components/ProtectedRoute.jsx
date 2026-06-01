@@ -1,15 +1,15 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 
-export default function ProtectedRoute({ children }) {
-  const { user, loading } = useAuth();
+export default function AdminRoute({ children }) {
+  const { isAdmin, loading } = useAuth();
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0a0a0a] text-white">
+      <div className="min-h-[40vh] flex items-center justify-center">
         <div className="label-overline">Loading…</div>
       </div>
     );
   }
-  if (!user) return <Navigate to="/login" replace />;
+  if (!isAdmin) return <Navigate to="/login" replace />;
   return children;
 }

@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, apiError } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { Trash2, Plus, Pencil, Check, X } from "lucide-react";
 
 export default function Players() {
+  const { isAdmin } = useAuth();
   const [players, setPlayers] = useState([]);
   const [stats, setStats] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -103,18 +105,20 @@ export default function Players() {
           <div className="label-overline">Roster</div>
           <h1 className="font-display text-4xl sm:text-5xl tracking-tighter font-black mt-2">Joueurs</h1>
         </div>
-        <form onSubmit={addPlayer} className="flex gap-2" data-testid="add-player-form">
-          <input
-            data-testid="new-player-name-input"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="Nom du joueur"
-            className="bg-[#111] border border-[#222] rounded-md px-3 py-2 text-sm focus:outline-none focus:border-[#CCFF00] w-56"
-          />
-          <button type="submit" className="btn-primary flex items-center gap-2" data-testid="add-player-btn">
-            <Plus size={16} /> Ajouter
-          </button>
-        </form>
+        {isAdmin && (
+          <form onSubmit={addPlayer} className="flex gap-2" data-testid="add-player-form">
+            <input
+              data-testid="new-player-name-input"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="Nom du joueur"
+              className="bg-[#111] border border-[#222] rounded-md px-3 py-2 text-sm focus:outline-none focus:border-[#CCFF00] w-56"
+            />
+            <button type="submit" className="btn-primary flex items-center gap-2" data-testid="add-player-btn">
+              <Plus size={16} /> Ajouter
+            </button>
+          </form>
+        )}
       </header>
 
       <div className="flex items-center gap-3 flex-wrap">
@@ -162,14 +166,14 @@ export default function Players() {
               <th className="px-4 py-3 font-medium text-right">Win%</th>
               <th className="px-4 py-3 font-medium text-right">GD</th>
               <th className="px-4 py-3 font-medium text-right">ELO</th>
-              <th className="px-4 py-3" />
+              {isAdmin && <th className="px-4 py-3" />}
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan="10" className="px-4 py-6 text-center text-[#888]">Loading…</td></tr>
+              <tr><td colSpan={isAdmin ? 10 : 9} className="px-4 py-6 text-center text-[#888]">Loading…</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan="10" className="px-4 py-6 text-center text-[#888]">Aucun joueur.</td></tr>
+              <tr><td colSpan={isAdmin ? 10 : 9} className="px-4 py-6 text-center text-[#888]">Aucun joueur.</td></tr>
             ) : (
               filtered.map((p) => (
                 <tr key={p.id} className="border-t border-[#222] hover:bg-[#1a1a1a]" data-testid={`player-row-${p.id}`}>
@@ -191,11 +195,17 @@ export default function Players() {
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <button onClick={() => toggleActive(p)} className="text-xs" data-testid={`toggle-active-${p.id}`}>
-                      <span className={`px-2 py-1 rounded-full ${p.active ? "bg-[#CCFF00]/15 text-[#CCFF00]" : "bg-[#222] text-[#888]"}`}>
+                    {isAdmin ? (
+                      <button onClick={() => toggleActive(p)} className="text-xs" data-testid={`toggle-active-${p.id}`}>
+                        <span className={`px-2 py-1 rounded-full ${p.active ? "bg-[#CCFF00]/15 text-[#CCFF00]" : "bg-[#222] text-[#888]"}`}>
+                          {p.active ? "actif" : "inactif"}
+                        </span>
+                      </button>
+                    ) : (
+                      <span className={`text-xs px-2 py-1 rounded-full ${p.active ? "bg-[#CCFF00]/15 text-[#CCFF00]" : "bg-[#222] text-[#888]"}`}>
                         {p.active ? "actif" : "inactif"}
                       </span>
-                    </button>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-right font-mono">{p.matches_played ?? 0}</td>
                   <td className="px-4 py-3 text-right font-mono">{p.wins ?? 0}</td>
@@ -206,24 +216,26 @@ export default function Players() {
                     {(p.goal_diff ?? 0) > 0 ? "+" : ""}{p.goal_diff ?? 0}
                   </td>
                   <td className="px-4 py-3 text-right font-mono font-bold">{p.elo ?? 1500}</td>
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex justify-end gap-1">
-                      <button
-                        onClick={() => { setEditId(p.id); setEditName(p.name); }}
-                        className="p-2 text-[#888] hover:text-white hover:bg-[#222] rounded"
-                        data-testid={`edit-player-${p.id}`}
-                      >
-                        <Pencil size={14} />
-                      </button>
-                      <button
-                        onClick={() => removePlayer(p)}
-                        className="p-2 text-[#888] hover:text-[#FF3B30] hover:bg-[#222] rounded"
-                        data-testid={`delete-player-${p.id}`}
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </td>
+                  {isAdmin && (
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex justify-end gap-1">
+                        <button
+                          onClick={() => { setEditId(p.id); setEditName(p.name); }}
+                          className="p-2 text-[#888] hover:text-white hover:bg-[#222] rounded"
+                          data-testid={`edit-player-${p.id}`}
+                        >
+                          <Pencil size={14} />
+                        </button>
+                        <button
+                          onClick={() => removePlayer(p)}
+                          className="p-2 text-[#888] hover:text-[#FF3B30] hover:bg-[#222] rounded"
+                          data-testid={`delete-player-${p.id}`}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))
             )}

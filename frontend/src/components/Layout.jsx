@@ -1,6 +1,6 @@
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-import { LogOut, LayoutDashboard, Users, ListChecks, Shuffle, PlusCircle } from "lucide-react";
+import { LogIn, LogOut, LayoutDashboard, Users, ListChecks, Shuffle, PlusCircle, ShieldCheck } from "lucide-react";
 
 const navLinkClass = ({ isActive }) =>
   `px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${
@@ -10,7 +10,7 @@ const navLinkClass = ({ isActive }) =>
   }`;
 
 export default function Layout() {
-  const { user, logout } = useAuth();
+  const { user, isAdmin, logout } = useAuth();
   const navigate = useNavigate();
 
   return (
@@ -39,43 +39,56 @@ export default function Layout() {
             </NavLink>
           </nav>
           <div className="flex-1" />
-          <button
-            onClick={() => navigate("/matches/new")}
-            className="btn-primary hidden sm:flex items-center gap-2 text-sm"
-            data-testid="header-new-match-btn"
-          >
-            <PlusCircle size={16} /> Nouveau match
-          </button>
-          <div className="flex items-center gap-3 pl-3 border-l border-white/10">
-            <div className="text-right hidden sm:block">
-              <div className="text-xs text-[#888]">Connecté</div>
-              <div className="text-sm font-medium" data-testid="user-name">{user?.name}</div>
-            </div>
-            {user?.picture && (
-              <img src={user.picture} alt="" className="h-8 w-8 rounded-full border border-white/10" />
-            )}
+          {isAdmin && (
             <button
-              onClick={logout}
-              className="p-2 rounded-md text-[#888] hover:text-white hover:bg-[#1a1a1a] transition-colors"
-              title="Déconnexion"
-              data-testid="logout-btn"
+              onClick={() => navigate("/matches/new")}
+              className="btn-primary hidden sm:flex items-center gap-2 text-sm"
+              data-testid="header-new-match-btn"
             >
-              <LogOut size={16} />
+              <PlusCircle size={16} /> Nouveau match
             </button>
+          )}
+          <div className="flex items-center gap-3 pl-3 border-l border-white/10">
+            {isAdmin ? (
+              <>
+                <div className="text-right hidden sm:block">
+                  <div className="text-xs text-[#CCFF00] flex items-center gap-1 justify-end">
+                    <ShieldCheck size={12} /> Admin
+                  </div>
+                  <div className="text-xs text-[#888] truncate max-w-[160px]" data-testid="user-email">{user?.email}</div>
+                </div>
+                <button
+                  onClick={logout}
+                  className="p-2 rounded-md text-[#888] hover:text-white hover:bg-[#1a1a1a] transition-colors"
+                  title="Déconnexion"
+                  data-testid="logout-btn"
+                >
+                  <LogOut size={16} />
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => navigate("/login")}
+                className="btn-secondary flex items-center gap-2 text-sm"
+                data-testid="admin-login-link"
+              >
+                <LogIn size={14} /> Admin
+              </button>
+            )}
           </div>
         </div>
         {/* Mobile nav */}
         <nav className="md:hidden flex gap-1 overflow-x-auto px-3 pb-2 border-t border-white/5">
-          <NavLink to="/" end className={navLinkClass} data-testid="nav-dashboard-mobile">
+          <NavLink to="/" end className={navLinkClass}>
             <LayoutDashboard size={14} /> Dashboard
           </NavLink>
-          <NavLink to="/players" className={navLinkClass} data-testid="nav-players-mobile">
+          <NavLink to="/players" className={navLinkClass}>
             <Users size={14} /> Joueurs
           </NavLink>
-          <NavLink to="/matches" className={navLinkClass} data-testid="nav-matches-mobile">
+          <NavLink to="/matches" className={navLinkClass}>
             <ListChecks size={14} /> Matches
           </NavLink>
-          <NavLink to="/generator" className={navLinkClass} data-testid="nav-generator-mobile">
+          <NavLink to="/generator" className={navLinkClass}>
             <Shuffle size={14} /> Gen
           </NavLink>
         </nav>
