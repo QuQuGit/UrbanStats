@@ -1,0 +1,142 @@
+{
+  "theme_and_archetype": {
+    "domain": "Sports Analytics / Football Tracker",
+    "theme": "Dark",
+    "archetype": "Archetype 2: The Performance Pro (Adapted for 'Sombre et Simple')",
+    "core_vibe": "Minimalist, tactical, high-contrast, data-heavy but scannable. Elite athletic command center.",
+    "emotional_tone": "Competitive, clear, authoritative."
+  },
+  "typography": {
+    "fonts": {
+      "headings": "Cabinet Grotesk",
+      "body": "Manrope",
+      "mono": "JetBrains Mono"
+    },
+    "hierarchy": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl tracking-tighter font-black",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl tracking-tight font-bold",
+      "h3": "text-xl sm:text-2xl tracking-tight font-semibold",
+      "h4": "text-lg sm:text-xl font-medium",
+      "body": "text-base leading-relaxed",
+      "labels_overlines": "text-xs uppercase tracking-[0.2em] font-bold"
+    },
+    "rules": [
+      "No generic sans (Inter, Roboto) for headings.",
+      "Headlines > 32px MUST use tracking-tight or tracking-tighter.",
+      "Use JetBrains Mono for stats, scores, ELO numbers, and data tables to ensure tabular alignment.",
+      "The jump between a heading and its subheading must not exceed 2 Tailwind steps."
+    ],
+    "installation_commands": [
+      "yarn add @fontsource/cabinet-grotesk",
+      "yarn add @fontsource/manrope",
+      "yarn add @fontsource/jetbrains-mono"
+    ]
+  },
+  "colors": {
+    "backgrounds": {
+      "app": "#0A0A0A",
+      "surface": "#111111",
+      "surface_hover": "#1A1A1A",
+      "glass": "rgba(10, 10, 10, 0.6)"
+    },
+    "text": {
+      "primary": "#FFFFFF",
+      "secondary": "#888888",
+      "muted": "#555555",
+      "inverse": "#0A0A0A"
+    },
+    "borders": {
+      "default": "#222222",
+      "focus": "#CCFF00"
+    },
+    "accents": {
+      "primary": "#CCFF00",
+      "primary_hover": "#B3E600",
+      "secondary": "#007AFF",
+      "success": "#CCFF00",
+      "danger": "#FF3B30",
+      "warning": "#FF9500"
+    },
+    "rules": [
+      "Never use pure black #000000; use #0A0A0A (Deep Obsidian).",
+      "Limit the use of the primary Volt Green (#CCFF00) to key CTAs, active states, and winning statistics.",
+      "Ensure text meets APCA standards against backgrounds.",
+      "Hover states MUST explicitly set text color (e.g., hover:bg-[#1A1A1A] hover:text-white)."
+    ]
+  },
+  "layout_and_spacing": {
+    "spacing_scale": "Tailwind standard, but lean into generous spacing (p-6, p-8) for empty areas and tight spacing (gap-4) for data clusters.",
+    "dashboard_grid": {
+      "name": "The 'Control Room' Grid",
+      "base": "grid-cols-1 md:grid-cols-3 lg:grid-cols-4",
+      "gap": "gap-4 md:gap-6",
+      "span_logic": {
+        "summary_widget": "col-span-1",
+        "primary_chart": "col-span-1 md:col-span-2 lg:col-span-3",
+        "feed_list": "col-span-1 row-span-2"
+      }
+    },
+    "rules": [
+      "Containers with borders MUST have internal padding (p-6) to prevent text collision.",
+      "Mobile-First: Always start with grid-cols-1.",
+      "Every page MUST have a visible navigation bar on desktop.",
+      "Grid items MUST be direct children of grid containers."
+    ]
+  },
+  "surfaces_and_components": {
+    "cards": {
+      "style": "Grid Borders / Technical Look",
+      "background": "bg-[#111111]",
+      "border": "border border-[#222222]",
+      "radius": "rounded-none or max rounded-md (4-6px)",
+      "shadow": "none",
+      "hover": "hover:bg-[#1A1A1A] transition-colors"
+    },
+    "glassmorphism": {
+      "usage": "Sticky Nav / Sticky Header only",
+      "classes": "backdrop-blur-xl bg-black/60 border-b border-white/10"
+    },
+    "buttons": {
+      "primary": "bg-[#CCFF00] text-[#0A0A0A] font-bold rounded-md px-6 py-2 hover:bg-[#B3E600] active:scale-95 transition-all",
+      "secondary": "bg-transparent border border-[#222222] text-white hover:bg-[#1A1A1A] px-6 py-2 rounded-md transition-all"
+    },
+    "shadcn_overrides": [
+      "Customize borders to be sharp or max 6px radius.",
+      "Remove default soft shadows from Shadcn cards.",
+      "Use Shadcn tables but make rows border-b border-[#222222] and hover:bg-[#1A1A1A].",
+      "Use Phosphor icons (@phosphor-icons/react) instead of Lucide."
+    ]
+  },
+  "motion_and_interaction": {
+    "transitions": "transition-all duration-200 ease-in-out",
+    "hover_states": "All interactive elements must have hover and active states.",
+    "charts": "Recharts should have animation duration of 500ms.",
+    "accessibility": "Respect prefers-reduced-motion."
+  },
+  "media_and_images": {
+    "instructions_to_main_agent": "Use these exact URLs for backgrounds, heroes, and empty states. Do NOT use placeholder URLs.",
+    "images": {
+      "login_hero_bg": {
+        "url": "https://images.unsplash.com/photo-1676746424139-77f8bd8922a8?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NjZ8MHwxfHNlYXJjaHwyfHxzb2NjZXIlMjBmaWVsZCUyMHVuZGVyJTIwbmlnaHQlMjBsaWdodHN8ZW58MHx8fHwxNzgwMzAwMjM5fDA&ixlib=rb-4.1.0&q=85",
+        "description": "Soccer field at night under stadium lights. Use as the background for the Google Login screen with a heavy bg-black/70 overlay to ensure login button pops."
+      },
+      "dashboard_tactical_bg": {
+        "url": "https://static.prod-images.emergentagent.com/jobs/5dcdfc1d-4d12-400d-8284-19f90788186e/images/17f93b117872ccfd1f9671483dcda9508bc10844a66e2816770e4ad658e4cf8e.png",
+        "description": "Minimalist 5v5 tactical pitch grid. Use in the 'Balanced Team Generator' section or behind key data visualization empty states. Must be very low opacity (opacity-20) blended into the black background."
+      },
+      "abstract_analytics_bg": {
+        "url": "https://static.prod-images.emergentagent.com/jobs/5dcdfc1d-4d12-400d-8284-19f90788186e/images/0761d622954a0f757762f286a7b15fa362fdf28b13ed59517a2255d2bb2a6248.png",
+        "description": "Abstract sports data numbers. Can be used for empty states on player profile pages or general decorative backgrounds."
+      }
+    }
+  },
+  "pages_and_features_instructions": {
+    "global_testing": "All interactive and key informational elements MUST include a `data-testid` attribute (e.g., `data-testid=\"login-btn\"`).",
+    "authentication": "Full-screen dark layout. The `login_hero_bg` image covers the viewport. Heavy dark overlay (bg-black/80). Center a glassmorphic card for the Google Login button.",
+    "dashboard_page": "Implement 'Control Room' bento grid. Top row: Global Stats (Total Matches, Active Players) using large JetBrains Mono numbers. Middle row: Top 10 Rankings tables (Win Rate, ELO). Bottom row: Last 20 Matches feed.",
+    "player_management": "Use a clean Shadcn table. Columns: Player Name, Matches Played, Wins, Draws, Losses, Win%, Goals, ELO. Stick to tabular numeric alignment.",
+    "match_entry": "Split layout. Left: Team A composition. Right: Team B composition. Bottom: Score inputs and Submit. Use Phosphor Icons for player addition.",
+    "team_generator": "Use `dashboard_tactical_bg` as a subtle watermark background. Two columns: Available Players (Checkbox list) -> Most Balanced Teams Output. Show the balance percentage in Volt Green (#CCFF00) if >90%.",
+    "player_profile": "Top section: Summary Stats (large numbers). Main content: Recharts line chart showing ELO over time. Use #007AFF for the ELO line chart, minimal grid lines, tooltip on hover."
+  }
+}
