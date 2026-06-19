@@ -53,7 +53,7 @@ export default function TeamGenerator() {
         <div className="label-overline">Tactical</div>
         <h1 className="font-display text-4xl sm:text-5xl tracking-tighter font-black mt-2">Générateur d'équipes</h1>
         <p className="text-[#888] mt-2 max-w-2xl">
-          Sélectionnez les joueurs présents. Le système propose 3 répartitions optimisées par ELO,
+          Sélectionnez les joueurs présents. Le système propose 3 répartitions optimisées par TrueSkill,
           win%, goal-diff et matches joués.
         </p>
       </header>
