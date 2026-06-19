@@ -141,6 +141,13 @@ class TeamGenInput(BaseModel):
     strategy: str = "best"
 
 
+class NextLineupInput(BaseModel):
+    team_a: List[str]
+    team_b: List[str]
+    date: Optional[str] = None
+    venue: Optional[str] = None
+
+
 # ---------------------------------------------------------------------------
 # Auth routes
 # ---------------------------------------------------------------------------
@@ -426,6 +433,47 @@ async def team_generator(payload: TeamGenInput):
     for strat in ("best", "competitive", "random_fair"):
         options.append(generate_balanced_teams(payload.player_ids, stats, ratings_lookup=ratings, strategy=strat))
     return {"options": options}
+
+
+# ---------------------------------------------------------------------------
+# Next lineup (singleton)
+# ---------------------------------------------------------------------------
+@api.get("/next-lineup")
+async def get_next_lineup():
+    doc = await db.next_lineup.find_one({"key": "current"}, {"_id": 0})
+    if not doc:
+        return {"team_a": [], "team_b": [], "date": None, "venue": None, "updated_at": None}
+    doc.pop("key", None)
+    return doc
+
+
+@api.put("/next-lineup")
+async def set_next_lineup(payload: NextLineupInput, user: dict = Depends(require_admin)):
+    if not payload.team_a and not payload.team_b:
+        raise HTTPException(status_code=400, detail="Au moins une équipe doit avoir des joueurs")
+    if payload.team_a and payload.team_b and len(payload.team_a) != len(payload.team_b):
+        raise HTTPException(status_code=400, detail="Les équipes doivent contenir le même nombre de joueurs")
+    if set(payload.team_a) & set(payload.team_b):
+        raise HTTPException(status_code=400, detail="Un joueur ne peut pas être dans les deux équipes")
+    await _ensure_players_exist(payload.team_a + payload.team_b)
+    doc = {
+        "key": "current",
+        "team_a": payload.team_a,
+        "team_b": payload.team_b,
+        "date": payload.date,
+        "venue": payload.venue,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_by": user.get("user_id"),
+    }
+    await db.next_lineup.update_one({"key": "current"}, {"$set": doc}, upsert=True)
+    doc.pop("key", None)
+    return doc
+
+
+@api.delete("/next-lineup")
+async def clear_next_lineup(_: dict = Depends(require_admin)):
+    await db.next_lineup.delete_one({"key": "current"})
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------------------

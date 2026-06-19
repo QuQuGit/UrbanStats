@@ -318,3 +318,131 @@ class TestSeedIdempotent:
             json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
         )
         assert r.status_code == 200
+
+
+
+# --- Next Lineup (Prochaine compo) singleton ------------------------------
+class TestNextLineup:
+    """GET public, PUT/DELETE admin-only, singleton via key='current'."""
+
+    saved_state = None
+
+    @classmethod
+    def _player_ids(cls, n=10):
+        r = requests.get(f"{BASE_URL}/api/players")
+        assert r.status_code == 200
+        players = [p for p in r.json() if p.get("id", "").startswith("plr_")]
+        assert len(players) >= n, f"Need at least {n} players, got {len(players)}"
+        return [p["id"] for p in players[:n]]
+
+    def test_get_public_no_auth_required(self):
+        # Snapshot current state for restoration later
+        r = requests.get(f"{BASE_URL}/api/next-lineup")
+        assert r.status_code == 200
+        d = r.json()
+        # Required keys present
+        for k in ("team_a", "team_b", "date", "venue", "updated_at"):
+            assert k in d, f"Missing key {k} in response: {d}"
+        assert isinstance(d["team_a"], list)
+        assert isinstance(d["team_b"], list)
+        TestNextLineup.saved_state = d
+
+    def test_put_requires_auth_401(self):
+        r = requests.put(
+            f"{BASE_URL}/api/next-lineup",
+            json={"team_a": ["plr_x"], "team_b": []},
+        )
+        assert r.status_code in (401, 403), r.text
+
+    def test_delete_requires_auth_401(self):
+        r = requests.delete(f"{BASE_URL}/api/next-lineup")
+        assert r.status_code in (401, 403)
+
+    def test_put_rejects_both_empty_400(self, auth_session):
+        r = auth_session.put(f"{BASE_URL}/api/next-lineup", json={"team_a": [], "team_b": []})
+        assert r.status_code == 400, r.text
+
+    def test_put_rejects_size_mismatch_400(self, auth_session):
+        pids = self._player_ids(6)
+        r = auth_session.put(
+            f"{BASE_URL}/api/next-lineup",
+            json={"team_a": pids[:3], "team_b": pids[3:5]},  # 3 vs 2
+        )
+        assert r.status_code == 400, r.text
+        assert "même" in r.text.lower() or "equal" in r.text.lower() or "nombre" in r.text.lower()
+
+    def test_put_rejects_overlap_400(self, auth_session):
+        pids = self._player_ids(6)
+        # overlap pids[2] in both
+        r = auth_session.put(
+            f"{BASE_URL}/api/next-lineup",
+            json={"team_a": pids[:3], "team_b": [pids[2], pids[3], pids[4]]},
+        )
+        assert r.status_code == 400, r.text
+
+    def test_put_rejects_unknown_player(self, auth_session):
+        r = auth_session.put(
+            f"{BASE_URL}/api/next-lineup",
+            json={"team_a": ["plr_doesnotexist_xyz"], "team_b": []},
+        )
+        assert r.status_code in (400, 404), r.text
+
+    def test_put_set_and_get_persisted(self, auth_session):
+        pids = self._player_ids(10)
+        payload = {
+            "team_a": pids[:5],
+            "team_b": pids[5:10],
+            "date": "2026-02-15",
+            "venue": "Stade TEST",
+        }
+        r = auth_session.put(f"{BASE_URL}/api/next-lineup", json=payload)
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert d["team_a"] == pids[:5]
+        assert d["team_b"] == pids[5:10]
+        assert d["date"] == "2026-02-15"
+        assert d["venue"] == "Stade TEST"
+        assert d.get("updated_at")
+        assert "key" not in d  # singleton key stripped
+        assert "_id" not in d
+        # GET persistence
+        r2 = requests.get(f"{BASE_URL}/api/next-lineup")
+        assert r2.status_code == 200
+        d2 = r2.json()
+        assert d2["team_a"] == pids[:5]
+        assert d2["team_b"] == pids[5:10]
+        assert d2["venue"] == "Stade TEST"
+
+    def test_put_one_team_only_ok(self, auth_session):
+        pids = self._player_ids(3)
+        r = auth_session.put(
+            f"{BASE_URL}/api/next-lineup",
+            json={"team_a": pids, "team_b": []},
+        )
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert d["team_a"] == pids and d["team_b"] == []
+
+    def test_delete_clears(self, auth_session):
+        r = auth_session.delete(f"{BASE_URL}/api/next-lineup")
+        assert r.status_code == 200
+        # confirm cleared
+        r2 = requests.get(f"{BASE_URL}/api/next-lineup")
+        assert r2.status_code == 200
+        d = r2.json()
+        assert d["team_a"] == [] and d["team_b"] == []
+
+    def test_restore_snapshot(self, auth_session):
+        """Restore the lineup that existed before this test class ran (best effort)."""
+        prev = TestNextLineup.saved_state or {}
+        if prev.get("team_a") or prev.get("team_b"):
+            r = auth_session.put(
+                f"{BASE_URL}/api/next-lineup",
+                json={
+                    "team_a": prev.get("team_a", []),
+                    "team_b": prev.get("team_b", []),
+                    "date": prev.get("date"),
+                    "venue": prev.get("venue"),
+                },
+            )
+            assert r.status_code == 200

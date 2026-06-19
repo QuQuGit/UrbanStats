@@ -10,6 +10,8 @@ import Matches from "@/pages/Matches";
 import MatchForm from "@/pages/MatchForm";
 import TeamGenerator from "@/pages/TeamGenerator";
 import PlayerProfile from "@/pages/PlayerProfile";
+import NextLineup from "@/pages/NextLineup";
+import NextLineupEdit from "@/pages/NextLineupEdit";
 import { Toaster } from "sonner";
 
 export default function App() {
@@ -24,6 +26,11 @@ export default function App() {
             <Route path="player/:id" element={<PlayerProfile />} />
             <Route path="matches" element={<Matches />} />
             <Route path="generator" element={<TeamGenerator />} />
+            <Route path="next" element={<NextLineup />} />
+            <Route
+              path="next/edit"
+              element={<AdminRoute><NextLineupEdit /></AdminRoute>}
+            />
             <Route
               path="matches/new"
               element={<AdminRoute><MatchForm /></AdminRoute>}

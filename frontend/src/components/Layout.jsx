@@ -1,6 +1,6 @@
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-import { LogIn, LogOut, LayoutDashboard, Users, ListChecks, Shuffle, PlusCircle, ShieldCheck } from "lucide-react";
+import { LogIn, LogOut, LayoutDashboard, Users, ListChecks, Shuffle, PlusCircle, ShieldCheck, Sparkles } from "lucide-react";
 
 const navLinkClass = ({ isActive }) =>
   `px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${
@@ -27,6 +27,9 @@ export default function Layout() {
           <nav className="hidden md:flex items-center gap-1 ml-4">
             <NavLink to="/" end className={navLinkClass} data-testid="nav-dashboard">
               <LayoutDashboard size={16} /> Dashboard
+            </NavLink>
+            <NavLink to="/next" className={navLinkClass} data-testid="nav-next">
+              <Sparkles size={16} /> Prochaine compo
             </NavLink>
             <NavLink to="/players" className={navLinkClass} data-testid="nav-players">
               <Users size={16} /> Joueurs
@@ -81,6 +84,9 @@ export default function Layout() {
         <nav className="md:hidden flex gap-1 overflow-x-auto px-3 pb-2 border-t border-white/5">
           <NavLink to="/" end className={navLinkClass}>
             <LayoutDashboard size={14} /> Dashboard
+          </NavLink>
+          <NavLink to="/next" className={navLinkClass}>
+            <Sparkles size={14} /> Compo
           </NavLink>
           <NavLink to="/players" className={navLinkClass}>
             <Users size={14} /> Joueurs

@@ -1,14 +1,32 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api, apiError } from "@/lib/api";
 import { toast } from "sonner";
-import { Shuffle } from "lucide-react";
+import { Shuffle, Sparkles } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
 export default function TeamGenerator() {
+  const { isAdmin } = useAuth();
+  const navigate = useNavigate();
   const [players, setPlayers] = useState([]);
   const [selected, setSelected] = useState(new Set());
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [savingIdx, setSavingIdx] = useState(-1);
+
+  const setAsNext = async (opt, idx) => {
+    setSavingIdx(idx);
+    try {
+      await api.put("/next-lineup", { team_a: opt.team_a, team_b: opt.team_b });
+      toast.success("Prochaine compo mise à jour");
+      navigate("/next");
+    } catch (e) {
+      toast.error(apiError(e));
+    } finally {
+      setSavingIdx(-1);
+    }
+  };
 
   useEffect(() => {
     (async () => {
@@ -118,7 +136,15 @@ export default function TeamGenerator() {
           <div className="label-overline">Suggestions</div>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
             {results.options.map((opt, idx) => (
-              <OptionCard key={idx} opt={opt} idx={idx} playersById={playersById} />
+              <OptionCard
+                key={idx}
+                opt={opt}
+                idx={idx}
+                playersById={playersById}
+                isAdmin={isAdmin}
+                onSetAsNext={() => setAsNext(opt, idx)}
+                saving={savingIdx === idx}
+              />
             ))}
           </div>
         </section>
@@ -133,12 +159,12 @@ const STRATEGY_LABELS = {
   random_fair: { title: "Aléatoire équitable", subtitle: "Variation équilibrée" },
 };
 
-function OptionCard({ opt, idx, playersById }) {
+function OptionCard({ opt, idx, playersById, isAdmin, onSetAsNext, saving }) {
   const meta = STRATEGY_LABELS[opt.strategy] || { title: opt.strategy, subtitle: "" };
   const balance = opt.balance_pct ?? 0;
   const balanceColor = balance >= 90 ? "#CCFF00" : balance >= 75 ? "#FF9500" : "#FF3B30";
   return (
-    <div className="card-surface p-6 fade-up" data-testid={`gen-option-${opt.strategy}`}>
+    <div className="card-surface p-6 fade-up flex flex-col" data-testid={`gen-option-${opt.strategy}`}>
       <div className="flex items-baseline justify-between">
         <div>
           <div className="label-overline">Option {idx + 1}</div>
@@ -162,6 +188,16 @@ function OptionCard({ opt, idx, playersById }) {
         <Tag k="Δ GD" v={opt.goal_diff_diff} />
         <Tag k="P(A win)" v={`${opt.predicted_win_prob_a}%`} />
       </div>
+      {isAdmin && (
+        <button
+          onClick={onSetAsNext}
+          disabled={saving}
+          className="mt-4 btn-primary w-full flex items-center justify-center gap-2 text-sm"
+          data-testid={`set-as-next-${opt.strategy}`}
+        >
+          <Sparkles size={14} /> {saving ? "Mise à jour…" : "Définir comme prochaine compo"}
+        </button>
+      )}
     </div>
   );
 }
