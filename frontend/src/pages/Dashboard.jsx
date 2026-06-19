@@ -1,9 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, apiError } from "@/lib/api";
-import { ArrowUpRight, Trophy, Target, Users as UsersIcon } from "lucide-react";
+import { ArrowUpRight, Trophy, Target, Users as UsersIcon, ArrowUp, ArrowDown } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
+
+const COLUMNS = [
+  { key: "rank", label: "#", className: "w-10 text-center", sortable: false },
+  { key: "name", label: "Joueur", className: "" },
+  { key: "matches_played", label: "M", className: "text-right w-12" },
+  { key: "wins", label: "V", className: "text-right w-12" },
+  { key: "draws", label: "N", className: "text-right w-12" },
+  { key: "losses", label: "D", className: "text-right w-12" },
+  { key: "win_rate", label: "Win%", className: "text-right w-16" },
+  { key: "goal_diff", label: "GD", className: "text-right w-14" },
+  { key: "points", label: "Pts", className: "text-right w-14" },
+  { key: "trueskill", label: "Skill", className: "text-right w-20" },
+];
 
 export default function Dashboard() {
   const { isAdmin } = useAuth();
@@ -11,6 +24,7 @@ export default function Dashboard() {
   const [players, setPlayers] = useState([]);
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [sort, setSort] = useState({ key: "trueskill", dir: -1 });
 
   useEffect(() => {
     (async () => {
@@ -37,24 +51,23 @@ export default function Dashboard() {
     return m;
   }, [players]);
 
-  const topWinRate = useMemo(() => {
-    return [...players]
-      .filter((p) => p.matches_played >= 1)
-      .sort((a, b) => b.win_rate - a.win_rate || b.matches_played - a.matches_played)
-      .slice(0, 10);
-  }, [players]);
+  const ranked = useMemo(() => {
+    const arr = [...players];
+    arr.sort((a, b) => {
+      const av = a[sort.key] ?? 0;
+      const bv = b[sort.key] ?? 0;
+      if (typeof av === "string") return av.localeCompare(bv) * sort.dir;
+      return (av - bv) * sort.dir;
+    });
+    return arr;
+  }, [players, sort]);
 
-  const topElo = useMemo(() => {
-    return [...players].sort((a, b) => b.elo - a.elo).slice(0, 10);
-  }, [players]);
+  const toggleSort = (key) => {
+    if (key === "rank") return;
+    setSort((s) => (s.key === key ? { key, dir: -s.dir } : { key, dir: key === "name" ? 1 : -1 }));
+  };
 
-  const topGd = useMemo(() => {
-    return [...players].sort((a, b) => b.goal_diff - a.goal_diff).slice(0, 10);
-  }, [players]);
-
-  if (loading) {
-    return <div className="label-overline">Loading…</div>;
-  }
+  if (loading) return <div className="label-overline">Loading…</div>;
 
   return (
     <div className="space-y-8" data-testid="dashboard-page">
@@ -65,35 +78,17 @@ export default function Dashboard() {
         </h1>
       </header>
 
-      {/* Global Stats */}
       <section className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
-        <StatBox
-          label="Matches joués"
-          value={globalStats?.total_matches ?? 0}
-          icon={<Trophy size={18} />}
-          testid="stat-total-matches"
-        />
-        <StatBox
-          label="Buts marqués"
-          value={globalStats?.total_goals ?? 0}
-          icon={<Target size={18} />}
-          testid="stat-total-goals"
-        />
-        <StatBox
-          label="Joueurs actifs"
-          value={`${globalStats?.active_players ?? 0} / ${globalStats?.total_players ?? 0}`}
-          icon={<UsersIcon size={18} />}
-          testid="stat-active-players"
-        />
+        <StatBox label="Matches joués" value={globalStats?.total_matches ?? 0} icon={<Trophy size={18} />} testid="stat-total-matches" />
+        <StatBox label="Buts marqués" value={globalStats?.total_goals ?? 0} icon={<Target size={18} />} testid="stat-total-goals" />
+        <StatBox label="Joueurs actifs" value={`${globalStats?.active_players ?? 0} / ${globalStats?.total_players ?? 0}`} icon={<UsersIcon size={18} />} testid="stat-active-players" />
       </section>
 
-      {players.length === 0 && (
+      {players.length === 0 ? (
         <div className="card-surface p-8 text-center">
           <div className="font-display text-2xl font-bold">Aucun joueur pour l'instant</div>
           <p className="text-[#888] mt-2">
-            {isAdmin
-              ? "Commencez par ajouter quelques joueurs, puis saisissez un match."
-              : "L'admin n'a pas encore ajouté de joueurs."}
+            {isAdmin ? "Ajoutez des joueurs puis saisissez un match." : "L'admin n'a pas encore ajouté de joueurs."}
           </p>
           {isAdmin && (
             <div className="mt-4 flex gap-2 justify-center">
@@ -102,38 +97,74 @@ export default function Dashboard() {
             </div>
           )}
         </div>
+      ) : (
+        <section className="card-surface p-6 fade-up" data-testid="ranking-table">
+          <div className="flex items-baseline justify-between mb-4 flex-wrap gap-2">
+            <div>
+              <div className="label-overline">Ranking</div>
+              <h2 className="font-display text-2xl tracking-tight font-bold">Classement complet · TrueSkill</h2>
+            </div>
+            <div className="text-xs text-[#666]">
+              {ranked.length} joueur{ranked.length > 1 ? "s" : ""} · tri par&nbsp;
+              <span className="text-white">{COLUMNS.find((c) => c.key === sort.key)?.label || sort.key}</span>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-[#888]">
+                  {COLUMNS.map((c) => (
+                    <th
+                      key={c.key}
+                      className={`px-3 py-2 font-medium ${c.className} ${c.sortable === false ? "" : "cursor-pointer hover:text-white select-none"}`}
+                      onClick={() => toggleSort(c.key)}
+                      data-testid={`sort-${c.key}`}
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        {c.label}
+                        {sort.key === c.key && (sort.dir === 1 ? <ArrowUp size={11} /> : <ArrowDown size={11} />)}
+                      </span>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {ranked.map((p, idx) => (
+                  <tr key={p.player_id} className="border-t border-[#222] hover:bg-[#1a1a1a]" data-testid={`rank-row-${p.player_id}`}>
+                    <td className="px-3 py-2 text-center font-mono text-xs text-[#888]">{idx + 1}</td>
+                    <td className="px-3 py-2">
+                      <Link to={`/player/${p.player_id}`} className="hover:text-[#CCFF00] flex items-center gap-2">
+                        <span className={`h-1.5 w-1.5 rounded-full ${p.active ? "bg-[#CCFF00]" : "bg-[#444]"}`} />
+                        {p.name}
+                      </Link>
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono">{p.matches_played}</td>
+                    <td className="px-3 py-2 text-right font-mono">{p.wins}</td>
+                    <td className="px-3 py-2 text-right font-mono">{p.draws}</td>
+                    <td className="px-3 py-2 text-right font-mono">{p.losses}</td>
+                    <td className="px-3 py-2 text-right font-mono">{p.win_rate}%</td>
+                    <td className={`px-3 py-2 text-right font-mono ${p.goal_diff > 0 ? "text-[#CCFF00]" : p.goal_diff < 0 ? "text-[#FF3B30]" : ""}`}>
+                      {p.goal_diff > 0 ? "+" : ""}{p.goal_diff}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono">{p.points}</td>
+                    <td className="px-3 py-2 text-right font-mono font-bold text-[#CCFF00]">
+                      {p.trueskill?.toFixed(2)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
       )}
 
-      {/* Rankings widgets */}
-      <section className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
-        <RankingCard
-          title="Top 10 · Win Rate"
-          column="Win%"
-          rows={topWinRate.map((p) => ({ id: p.player_id, name: p.name, value: `${p.win_rate}%`, sub: `${p.matches_played} m.` }))}
-          testid="ranking-winrate"
-        />
-        <RankingCard
-          title="Top 10 · ELO"
-          column="ELO"
-          rows={topElo.map((p) => ({ id: p.player_id, name: p.name, value: p.elo, sub: `${p.matches_played} m.` }))}
-          testid="ranking-elo"
-        />
-        <RankingCard
-          title="Top 10 · Goal Diff"
-          column="GD"
-          rows={topGd.map((p) => ({ id: p.player_id, name: p.name, value: signed(p.goal_diff), sub: `${p.matches_played} m.` }))}
-          testid="ranking-gd"
-        />
-      </section>
-
-      {/* Recent matches */}
       <section className="card-surface p-6" data-testid="recent-matches">
         <div className="flex items-center justify-between mb-4">
           <div>
             <div className="label-overline">Recent</div>
             <h2 className="font-display text-2xl tracking-tight font-bold">20 derniers matches</h2>
           </div>
-          <Link to="/matches" className="text-sm text-[#CCFF00] hover:underline flex items-center gap-1" data-testid="see-all-matches">
+          <Link to="/matches" className="text-sm text-[#CCFF00] hover:underline flex items-center gap-1">
             Voir tout <ArrowUpRight size={14} />
           </Link>
         </div>
@@ -151,11 +182,6 @@ export default function Dashboard() {
   );
 }
 
-function signed(n) {
-  if (n > 0) return `+${n}`;
-  return `${n}`;
-}
-
 function StatBox({ label, value, icon, testid }) {
   return (
     <div className="card-surface p-6 fade-up" data-testid={testid}>
@@ -168,46 +194,8 @@ function StatBox({ label, value, icon, testid }) {
   );
 }
 
-function RankingCard({ title, column, rows, testid }) {
-  return (
-    <div className="card-surface p-6 fade-up" data-testid={testid}>
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <div className="label-overline">Ranking</div>
-          <h3 className="font-display text-xl font-semibold tracking-tight">{title}</h3>
-        </div>
-        <div className="label-overline">{column}</div>
-      </div>
-      {rows.length === 0 ? (
-        <div className="text-[#888] text-sm">Aucune donnée.</div>
-      ) : (
-        <ul className="space-y-1">
-          {rows.map((r, idx) => (
-            <li key={r.id}>
-              <Link
-                to={`/player/${r.id}`}
-                className="flex items-center justify-between py-2 px-2 -mx-2 rounded hover:bg-[#1a1a1a] transition-colors"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <span className="font-mono text-xs text-[#666] w-5 text-right">{idx + 1}</span>
-                  <span className="truncate">{r.name}</span>
-                </div>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-xs text-[#666]">{r.sub}</span>
-                  <span className="font-mono font-bold">{r.value}</span>
-                </div>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
 function MatchRow({ m, playersById }) {
-  const winner =
-    m.score_a > m.score_b ? "A" : m.score_a < m.score_b ? "B" : "D";
+  const winner = m.score_a > m.score_b ? "A" : m.score_a < m.score_b ? "B" : "D";
   return (
     <li className="py-3 flex items-center gap-4" data-testid={`match-row-${m.id}`}>
       <div className="w-20 text-xs text-[#888] font-mono">{m.date}</div>

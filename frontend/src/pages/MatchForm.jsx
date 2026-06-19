@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, apiError } from "@/lib/api";
 import { toast } from "sonner";
-import { X, Plus } from "lucide-react";
+import { X, Plus, Shuffle, History } from "lucide-react";
 
 const TEAM_SIZE = 5;
 
@@ -12,6 +12,7 @@ export default function MatchForm() {
   const isEdit = Boolean(id);
 
   const [players, setPlayers] = useState([]);
+  const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [teamA, setTeamA] = useState([]);
@@ -19,15 +20,16 @@ export default function MatchForm() {
   const [scoreA, setScoreA] = useState(0);
   const [scoreB, setScoreB] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const [balancing, setBalancing] = useState(false);
 
   useEffect(() => {
     (async () => {
       try {
-        const p = await api.get("/players");
+        const [p, mlist] = await Promise.all([api.get("/players"), api.get("/matches")]);
         setPlayers(p.data);
+        setMatches(mlist.data);
         if (isEdit) {
-          const m = await api.get("/matches");
-          const match = m.data.find((x) => x.id === id);
+          const match = mlist.data.find((x) => x.id === id);
           if (!match) {
             toast.error("Match introuvable");
             navigate("/matches");
@@ -48,9 +50,9 @@ export default function MatchForm() {
   }, [id, isEdit, navigate]);
 
   const playersById = useMemo(() => Object.fromEntries(players.map((p) => [p.id, p])), [players]);
-
   const usedIds = useMemo(() => new Set([...teamA, ...teamB]), [teamA, teamB]);
-  const availableForTeam = (target) => {
+
+  const availableForTeam = () => {
     return players
       .filter((p) => !usedIds.has(p.id))
       .sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name));
@@ -69,6 +71,34 @@ export default function MatchForm() {
   const removeFromTeam = (team, pid) => {
     if (team === "A") setTeamA(teamA.filter((x) => x !== pid));
     else setTeamB(teamB.filter((x) => x !== pid));
+  };
+
+  // Action: équilibrer la sélection actuelle (teamA ∪ teamB) via le générateur
+  const balanceSelection = async () => {
+    const ids = [...teamA, ...teamB];
+    if (ids.length < 2) return toast.error("Sélectionnez d'abord les joueurs présents");
+    if (ids.length % 2 !== 0) return toast.error("Nombre pair de joueurs requis pour équilibrer");
+    setBalancing(true);
+    try {
+      const { data } = await api.post("/team-generator", { player_ids: ids });
+      const best = data.options.find((o) => o.strategy === "best") || data.options[0];
+      setTeamA(best.team_a);
+      setTeamB(best.team_b);
+      toast.success(`Équilibrage : ${best.balance_pct}% (Δskill ${best.skill_diff})`);
+    } catch (e) {
+      toast.error(apiError(e));
+    } finally {
+      setBalancing(false);
+    }
+  };
+
+  // Action: charger la composition du dernier match enregistré
+  const loadLastMatch = () => {
+    const last = matches[0]; // matches sorted desc by date in backend
+    if (!last) return toast.error("Aucun match précédent");
+    setTeamA(last.team_a);
+    setTeamB(last.team_b);
+    toast.success(`Compo du ${last.date} chargée`);
   };
 
   const submit = async () => {
@@ -95,20 +125,44 @@ export default function MatchForm() {
 
   if (loading) return <div className="label-overline">Loading…</div>;
 
+  const totalSelected = teamA.length + teamB.length;
+
   return (
     <div className="space-y-6 fade-up" data-testid="match-form-page">
-      <header>
-        <div className="label-overline">{isEdit ? "Edit" : "Entry"}</div>
-        <h1 className="font-display text-4xl sm:text-5xl tracking-tighter font-black mt-2">
-          {isEdit ? "Éditer le match" : "Nouveau match"}
-        </h1>
+      <header className="flex items-end justify-between gap-4 flex-wrap">
+        <div>
+          <div className="label-overline">{isEdit ? "Edit" : "Entry"}</div>
+          <h1 className="font-display text-4xl sm:text-5xl tracking-tighter font-black mt-2">
+            {isEdit ? "Éditer le match" : "Nouveau match"}
+          </h1>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={loadLastMatch}
+            disabled={matches.length === 0}
+            className="btn-secondary flex items-center gap-2 text-sm"
+            data-testid="load-last-match-btn"
+          >
+            <History size={14} /> Charger dernier match
+          </button>
+          <button
+            type="button"
+            onClick={balanceSelection}
+            disabled={balancing || totalSelected < 2 || totalSelected % 2 !== 0}
+            className="btn-secondary flex items-center gap-2 text-sm"
+            data-testid="balance-selection-btn"
+          >
+            <Shuffle size={14} /> {balancing ? "Équilibrage…" : "Équilibrer la sélection"}
+          </button>
+        </div>
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
         <TeamPanel
           letter="A"
           team={teamA}
-          available={availableForTeam("A")}
+          available={availableForTeam()}
           playersById={playersById}
           score={scoreA}
           setScore={setScoreA}
@@ -119,7 +173,7 @@ export default function MatchForm() {
         <TeamPanel
           letter="B"
           team={teamB}
-          available={availableForTeam("B")}
+          available={availableForTeam()}
           playersById={playersById}
           score={scoreB}
           setScore={setScoreB}

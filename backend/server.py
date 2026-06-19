@@ -24,7 +24,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field, EmailStr
 
 from stats import (
-    INITIAL_ELO,
+    INITIAL_SKILL,
     replay_matches,
     generate_balanced_teams,
     best_teammates_for,
@@ -361,14 +361,15 @@ async def stats_players(min_matches: int = 0):
             "player_id": pid, "matches_played": 0, "wins": 0, "draws": 0, "losses": 0,
             "win_rate": 0, "goals_scored": 0, "goals_conceded": 0, "goal_diff": 0,
             "avg_goals_scored": 0, "avg_goals_conceded": 0, "points": 0,
-            "elo": INITIAL_ELO, "highest_elo": INITIAL_ELO, "lowest_elo": INITIAL_ELO,
-            "elo_change_last10": 0, "current_streak": {"kind": "", "count": 0},
-            "longest_win_streak": 0, "longest_loss_streak": 0, "last_results": "", "elo_history": [],
+            "trueskill": INITIAL_SKILL, "mu": 25.0, "sigma": round(25 / 3, 2),
+            "highest_trueskill": INITIAL_SKILL, "lowest_trueskill": INITIAL_SKILL,
+            "trueskill_change_last10": 0, "current_streak": {"kind": "", "count": 0},
+            "longest_win_streak": 0, "longest_loss_streak": 0, "last_results": "", "trueskill_history": [],
         })
         if s["matches_played"] < min_matches:
             continue
         s = {**s, "name": p["name"], "active": p.get("active", True)}
-        s.pop("elo_history", None)
+        s.pop("trueskill_history", None)
         out.append(s)
     return out
 
@@ -386,9 +387,10 @@ async def stats_player(pid: str):
             "player_id": pid, "matches_played": 0, "wins": 0, "draws": 0, "losses": 0,
             "win_rate": 0, "goals_scored": 0, "goals_conceded": 0, "goal_diff": 0,
             "avg_goals_scored": 0, "avg_goals_conceded": 0, "points": 0,
-            "elo": INITIAL_ELO, "highest_elo": INITIAL_ELO, "lowest_elo": INITIAL_ELO,
-            "elo_change_last10": 0, "current_streak": {"kind": "", "count": 0},
-            "longest_win_streak": 0, "longest_loss_streak": 0, "last_results": "", "elo_history": [],
+            "trueskill": INITIAL_SKILL, "mu": 25.0, "sigma": round(25 / 3, 2),
+            "highest_trueskill": INITIAL_SKILL, "lowest_trueskill": INITIAL_SKILL,
+            "trueskill_change_last10": 0, "current_streak": {"kind": "", "count": 0},
+            "longest_win_streak": 0, "longest_loss_streak": 0, "last_results": "", "trueskill_history": [],
         }
 
     name_by_id = {p["id"]: p["name"] for p in players}
@@ -419,9 +421,10 @@ async def team_generator(payload: TeamGenInput):
     _, matches = await _load_all()
     result = replay_matches(matches)
     stats = result["players"]
+    ratings = result["ratings"]
     options = []
     for strat in ("best", "competitive", "random_fair"):
-        options.append(generate_balanced_teams(payload.player_ids, stats, strategy=strat))
+        options.append(generate_balanced_teams(payload.player_ids, stats, ratings_lookup=ratings, strategy=strat))
     return {"options": options}
 
 

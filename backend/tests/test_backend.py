@@ -131,6 +131,83 @@ class TestPublicReads:
         assert "options" in d and len(d["options"]) == 3
         strategies = {o["strategy"] for o in d["options"]}
         assert strategies == {"best", "competitive", "random_fair"}
+        # New field names (Skill, not ELO)
+        for o in d["options"]:
+            for k in ("avg_skill_a", "avg_skill_b", "skill_diff", "balance_pct", "predicted_win_prob_a", "team_a", "team_b"):
+                assert k in o, f"missing {k} in {o}"
+            # No old elo keys
+            for old in ("avg_elo_a", "avg_elo_b", "elo_diff"):
+                assert old not in o, f"old key {old} should not be present"
+
+
+# --- New TrueSkill stats fields --------------------------------------------
+class TestTrueSkillStats:
+    def test_stats_players_has_trueskill_fields(self):
+        r = requests.get(f"{BASE_URL}/api/stats/players")
+        assert r.status_code == 200
+        items = r.json()
+        assert isinstance(items, list) and len(items) > 0
+        sample = items[0]
+        for k in ("trueskill", "mu", "sigma", "highest_trueskill", "lowest_trueskill", "trueskill_change_last10"):
+            assert k in sample, f"missing key {k}"
+        # No old ELO keys
+        for old in ("elo", "highest_elo", "lowest_elo", "elo_change_last10"):
+            assert old not in sample, f"old key {old} should not be present"
+        # Types
+        assert isinstance(sample["trueskill"], (int, float))
+        assert isinstance(sample["mu"], (int, float))
+        assert isinstance(sample["sigma"], (int, float))
+
+    def test_quentin_leads_sebc_low(self):
+        """Real seeded data: Quentin should have the highest trueskill (~7.56); SebC near 0/negative."""
+        r = requests.get(f"{BASE_URL}/api/stats/players")
+        assert r.status_code == 200
+        items = r.json()
+        by_name = {}
+        # Fetch player names
+        players = requests.get(f"{BASE_URL}/api/players").json()
+        pid_to_name = {p["id"]: p["name"] for p in players}
+        for s in items:
+            n = pid_to_name.get(s["player_id"])
+            if n:
+                by_name[n.lower()] = s
+        quentin = next((v for k, v in by_name.items() if "quentin" in k), None)
+        sebc = next((v for k, v in by_name.items() if "sebc" in k or "seb c" in k), None)
+        if not quentin or not sebc:
+            pytest.skip(f"Need Quentin+SebC in DB; got names={list(by_name.keys())}")
+        # Quentin should have a high positive trueskill
+        assert quentin["trueskill"] > 5.0, f"Quentin trueskill={quentin['trueskill']} not > 5"
+        # SebC should be near or below 0
+        assert sebc["trueskill"] < 1.0, f"SebC trueskill={sebc['trueskill']} not < 1"
+        # Quentin's trueskill is the max
+        max_ts = max(s["trueskill"] for s in items)
+        assert quentin["trueskill"] == max_ts, f"Quentin not max; max={max_ts}"
+
+    def test_stats_player_detail_trueskill_history(self):
+        players = requests.get(f"{BASE_URL}/api/players").json()
+        if not players:
+            pytest.skip("no players")
+        # Pick first player who has played any match
+        target = None
+        items = requests.get(f"{BASE_URL}/api/stats/players").json()
+        for s in items:
+            if s.get("matches_played", 0) > 0:
+                target = s["player_id"]; break
+        if not target:
+            pytest.skip("no player with matches")
+        r = requests.get(f"{BASE_URL}/api/stats/player/{target}")
+        assert r.status_code == 200
+        d = r.json()
+        assert "stats" in d
+        st = d["stats"]
+        # trueskill_history exists with right keys
+        assert "trueskill_history" in st
+        assert "elo_history" not in st
+        hist = st["trueskill_history"]
+        assert isinstance(hist, list) and len(hist) > 0
+        item = hist[0]
+        assert "match_id" in item and "date" in item and "skill" in item
+        assert "elo" not in item  # ensure no old key
 
 
 # --- Writes WITHOUT token = 401 ---------------------------------------------

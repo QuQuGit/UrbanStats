@@ -38,10 +38,10 @@ export default function PlayerProfile() {
 
   const { player, stats, best_teammates, tough_opponents, matches } = data;
 
-  const eloSeries = (stats.elo_history || []).map((h, idx) => ({
+  const eloSeries = (stats.trueskill_history || []).map((h, idx) => ({
     idx: idx + 1,
     date: h.date,
-    elo: h.elo,
+    skill: h.skill,
   }));
 
   const streakLabel = (() => {
@@ -64,9 +64,11 @@ export default function PlayerProfile() {
           <div className="text-[#888] text-sm mt-1">{player.active ? "Actif" : "Inactif"}</div>
         </div>
         <div className="text-right">
-          <div className="label-overline">ELO</div>
-          <div className="font-mono text-5xl font-bold text-[#CCFF00]">{stats.elo}</div>
-          <div className="text-xs text-[#888]">Max {stats.highest_elo} · Min {stats.lowest_elo}</div>
+          <div className="label-overline">TrueSkill</div>
+          <div className="font-mono text-5xl font-bold text-[#CCFF00]">{(stats.trueskill ?? 0).toFixed(2)}</div>
+          <div className="text-xs text-[#888]">
+            μ {stats.mu ?? "—"} · σ {stats.sigma ?? "—"} · Max {stats.highest_trueskill} · Min {stats.lowest_trueskill}
+          </div>
         </div>
       </header>
 
@@ -91,13 +93,13 @@ export default function PlayerProfile() {
           <div className="flex items-baseline justify-between mb-4">
             <div>
               <div className="label-overline">Progression</div>
-              <h2 className="font-display text-2xl tracking-tight font-bold">ELO au fil du temps</h2>
+              <h2 className="font-display text-2xl tracking-tight font-bold">TrueSkill au fil du temps</h2>
             </div>
             <div className="text-xs text-[#888] flex items-center gap-2">
-              {stats.elo_change_last10 >= 0 ? (
-                <span className="text-[#CCFF00] flex items-center gap-1"><TrendingUp size={14} /> +{stats.elo_change_last10}</span>
+              {(stats.trueskill_change_last10 ?? 0) >= 0 ? (
+                <span className="text-[#CCFF00] flex items-center gap-1"><TrendingUp size={14} /> +{stats.trueskill_change_last10}</span>
               ) : (
-                <span className="text-[#FF3B30] flex items-center gap-1"><TrendingDown size={14} /> {stats.elo_change_last10}</span>
+                <span className="text-[#FF3B30] flex items-center gap-1"><TrendingDown size={14} /> {stats.trueskill_change_last10}</span>
               )}
               · 10 derniers
             </div>
@@ -105,7 +107,7 @@ export default function PlayerProfile() {
           {eloSeries.length === 0 ? (
             <div className="text-sm text-[#666]">Pas encore de matches.</div>
           ) : (
-            <div className="h-64" data-testid="elo-chart">
+            <div className="h-64" data-testid="trueskill-chart">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={eloSeries} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
                   <CartesianGrid stroke="#222" strokeDasharray="3 3" />
@@ -115,7 +117,7 @@ export default function PlayerProfile() {
                     contentStyle={{ background: "#111", border: "1px solid #222", borderRadius: 6, color: "#fff" }}
                     labelFormatter={(v) => `Match #${v}`}
                   />
-                  <Line type="monotone" dataKey="elo" stroke="#007AFF" strokeWidth={2} dot={false} animationDuration={500} />
+                  <Line type="monotone" dataKey="skill" stroke="#007AFF" strokeWidth={2} dot={false} animationDuration={500} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -142,8 +144,8 @@ export default function PlayerProfile() {
           <div className="mt-6 space-y-2 text-sm">
             <Row k="Plus longue série victoire" v={stats.longest_win_streak} />
             <Row k="Plus longue série défaite" v={stats.longest_loss_streak} />
-            <Row k="ELO max" v={stats.highest_elo} />
-            <Row k="ELO min" v={stats.lowest_elo} />
+            <Row k="Skill max" v={stats.highest_trueskill} />
+            <Row k="Skill min" v={stats.lowest_trueskill} />
           </div>
         </div>
       </section>

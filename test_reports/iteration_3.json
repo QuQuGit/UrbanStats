@@ -1,0 +1,40 @@
+{
+  "summary": "Full e2e re-test after ELO→TrueSkill migration + Dashboard table + MatchForm 2-new-buttons. Backend: 28/28 pytest tests pass — extended /app/backend/tests/test_backend.py with TestTrueSkillStats (3 new tests) verifying GET /api/stats/players returns trueskill/mu/sigma/highest_trueskill/lowest_trueskill/trueskill_change_last10 and excludes elo/highest_elo/lowest_elo/elo_change_last10; verifying GET /api/stats/player/{id}.stats.trueskill_history is a list of {match_id,date,skill} (no 'elo' key, no 'elo_history' key); verifying real-data correctness — Quentin trueskill=7.56 (max), SebC=-0.01 (lowest, near zero/negative); POST /api/team-generator returns 3 options each with avg_skill_a, avg_skill_b, skill_diff, balance_pct, predicted_win_prob_a, team_a, team_b and ZERO legacy keys (avg_elo_a/avg_elo_b/elo_diff). All pre-existing auth/CRUD/public-reads still 100% green. Frontend: 100% green on all features tested via Playwright + visual inspection — (1) Dashboard at / renders 'Classement complet · TrueSkill' table for anonymous users showing all 15 players (not just 10), with 9 sortable headers data-testid=sort-{name,matches_played,wins,draws,losses,win_rate,goal_diff,points,trueskill} (plus sort-rank). Clicking sort-win_rate reorders rows so Patrice (100%) leads. Skill column shows 2-decimal floats (7.56, 6.71, 5.93, ...). (2) Anonymous users can view Dashboard without redirect to /login — public reads confirmed working. (3) Players page Skill column shows trueskill 2-dec floats (Quentin 7.56, SebC -0.01) — no '1500/1516' ELO-like values. (4) PlayerProfile shows headline 'TrueSkill' (no 'ELO'), μ/σ sub-text rendered, and Recharts chart with data-testid='trueskill-chart' titled 'TrueSkill au fil du temps'. (5) TeamGenerator labels confirmed: 'ΔSkill', 'Skill X.XX' on team panels (e.g. 'Skill 1.79'), strategy subtitles 'Skill le plus serré' and 'Niveaux Skill max'. (6) MatchForm (admin-only, login required): 'load-last-match-btn' loads team_a/team_b of most recent match (toast 'Compo du <date> chargée' fires, 5+5 players populated). 'balance-selection-btn' is correctly DISABLED when totalSelected<2 and ENABLED after loading. Clicking it calls /api/team-generator with union of teamA+teamB and applies the 'best' strategy: toast 'Équilibrage : 100% (Δskill 0)' shown and team_a/team_b reshuffled while preserving the same 10-player union.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "TeamGenerator page (/generator) header description", "issues": ["Stale copy: line 56-57 of /app/frontend/src/pages/TeamGenerator.jsx still reads 'Le système propose 3 répartitions optimisées par ELO, win%, goal-diff et matches joués.' — should say 'TrueSkill' (or 'Skill') instead of 'ELO' to match the rest of the migration. Minor copy issue; not a functional bug."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_backend.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "(Optional, minor) Replace 'optimisées par ELO' with 'optimisées par TrueSkill' (or 'Skill') in /app/frontend/src/pages/TeamGenerator.jsx around line 56-57 for copy consistency."
+  ],
+  "critical_code_review_comments": [
+    "stats.py is well structured: uses trueskill==0.4.5 with TS_ENV configured (draw_probability=0.10), _expose(rating)=mu-3*sigma as the conservative public skill (INITIAL_SKILL=0.0 = 25 - 3*8.33). Replay correctness verified empirically (Quentin's wins yield trueskill=7.56, SebC's losses yield -0.01).",
+    "stats.py replay_matches() does a TWO-pass scan over team players for streak/history (duplicated block lines 108-132 vs 134-158). Could be DRY'd into a single helper for_each_player(team, is_team_a) but minor.",
+    "stats.py generate_balanced_teams() correctly accepts ratings_lookup for predicted_win_prob; falls back to TS_ENV.create_rating() if missing. Good defensive coding.",
+    "server.py uses INITIAL_SKILL constant from stats.py for default player stats — good single source of truth.",
+    "Frontend Dashboard.jsx ranking columns list is concise and uses array-of-config — good maintainability.",
+    "MatchForm.jsx loadLastMatch reads matches[0] assuming backend sorts desc by date; if backend changes order this breaks silently — consider explicitly sorting client-side before pick.",
+    "MatchForm.jsx balanceSelection correctly disables when totalSelected<2 OR totalSelected%2!==0; handler also re-validates with toast.error — good belt-and-suspenders.",
+    "TeamGenerator.jsx line 56-57 has stale 'optimisées par ELO' copy — minor.",
+    "CORS allow_origins='*' with allow_credentials=True still present (carried from prev iteration); harmless with Bearer JWT but should be tightened for prod."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_backend.py (added TestTrueSkillStats class with 3 new tests verifying trueskill/mu/sigma fields, history shape, Quentin/SebC real-data correctness, and team-generator new field names)"
+  ],
+  "success_rate": {"backend": "100% (28/28)", "frontend": "100% (all 11 requested features verified)"},
+  "test_credentials": "Admin: qenquen@hotmail.com / 130588 (JWT Bearer; localStorage key 'fives_admin_token').",
+  "seed_data_creation": "Existing real DB preserved: 15 players (Quentin, Edouard, Mus, Maxime, Patrice, Aurel, Raphael, Sydney, OlivierS, JB, Soufiane, Benoit, Mehdi, Simo, SebC) + 7 matches. Backend admin-CRUD tests create TEST_AdminPlr_* + TEST_AdminM_*_* players and one TEST match, then clean up in test_delete_match_ok + test_delete_players_cleanup.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "TrueSkill migration is complete and correct. New field names: trueskill (was elo), mu/sigma exposed per player, trueskill_history with key 'skill' (was elo_history with key 'elo'), highest_trueskill/lowest_trueskill/trueskill_change_last10. Team-generator returns avg_skill_a/avg_skill_b/skill_diff (no avg_elo_*). INITIAL_SKILL=0.0 (mu=25, sigma≈8.33, exposure=mu-3*sigma). Dashboard data-testids: ranking-table, rank-row-<id>, sort-<column> headers including sort-rank/sort-name/sort-matches_played/sort-wins/sort-draws/sort-losses/sort-win_rate/sort-goal_diff/sort-points/sort-trueskill. MatchForm new data-testids: load-last-match-btn (disabled when matches.length==0), balance-selection-btn (disabled when totalSelected<2 OR totalSelected%2!==0). Frontend route for generator is /generator. Only minor copy issue is the stale 'ELO' word in TeamGenerator header description (line 56-57).",
+  "rca of the issue": "N/A — no bugs found this iteration. Migration verified end-to-end with real DB data; computed TrueSkill values match expectations (Quentin 7.56 max, SebC -0.01 min). Conservative skill (mu-3*sigma) increases with wins and sigma decreases over games as expected by the TrueSkill model."
+}

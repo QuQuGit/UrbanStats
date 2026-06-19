@@ -89,7 +89,7 @@ export default function Players() {
     const enriched = list.map((p) => ({ ...p, ...(statsById[p.id] || {}) }));
     const sorters = {
       name: (a, b) => a.name.localeCompare(b.name),
-      elo: (a, b) => (b.elo ?? 1500) - (a.elo ?? 1500),
+      elo: (a, b) => (b.trueskill ?? 0) - (a.trueskill ?? 0),
       matches: (a, b) => (b.matches_played ?? 0) - (a.matches_played ?? 0),
       winrate: (a, b) => (b.win_rate ?? 0) - (a.win_rate ?? 0),
       gd: (a, b) => (b.goal_diff ?? 0) - (a.goal_diff ?? 0),
@@ -146,7 +146,7 @@ export default function Players() {
           data-testid="players-sort-select"
         >
           <option value="name">Tri: Nom</option>
-          <option value="elo">Tri: ELO</option>
+          <option value="elo">Tri: Skill</option>
           <option value="matches">Tri: Matches</option>
           <option value="winrate">Tri: Win%</option>
           <option value="gd">Tri: Goal Diff</option>
@@ -165,7 +165,7 @@ export default function Players() {
               <th className="px-4 py-3 font-medium text-right">D</th>
               <th className="px-4 py-3 font-medium text-right">Win%</th>
               <th className="px-4 py-3 font-medium text-right">GD</th>
-              <th className="px-4 py-3 font-medium text-right">ELO</th>
+              <th className="px-4 py-3 font-medium text-right">Skill</th>
               {isAdmin && <th className="px-4 py-3" />}
             </tr>
           </thead>
@@ -215,7 +215,7 @@ export default function Players() {
                   <td className={`px-4 py-3 text-right font-mono ${(p.goal_diff ?? 0) > 0 ? "text-[#CCFF00]" : (p.goal_diff ?? 0) < 0 ? "text-[#FF3B30]" : ""}`}>
                     {(p.goal_diff ?? 0) > 0 ? "+" : ""}{p.goal_diff ?? 0}
                   </td>
-                  <td className="px-4 py-3 text-right font-mono font-bold">{p.elo ?? 1500}</td>
+                  <td className="px-4 py-3 text-right font-mono font-bold">{(p.trueskill ?? 0).toFixed(2)}</td>
                   {isAdmin && (
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-1">

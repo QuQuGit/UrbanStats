@@ -85,7 +85,7 @@ export default function TeamGenerator() {
                     data-testid={`gen-select-${p.id}`}
                   >
                     <span>{p.name}</span>
-                    <span className="font-mono text-xs text-[#888]">{p.elo ?? 1500}</span>
+                    <span className="font-mono text-xs text-[#888]">{(p.trueskill ?? 0).toFixed(1)}</span>
                   </button>
                 );
               })}
@@ -128,8 +128,8 @@ export default function TeamGenerator() {
 }
 
 const STRATEGY_LABELS = {
-  best: { title: "Meilleur équilibre", subtitle: "ELO le plus serré" },
-  competitive: { title: "Plus compétitif", subtitle: "Niveaux ELO max" },
+  best: { title: "Meilleur équilibre", subtitle: "Skill le plus serré" },
+  competitive: { title: "Plus compétitif", subtitle: "Niveaux Skill max" },
   random_fair: { title: "Aléatoire équitable", subtitle: "Variation équilibrée" },
 };
 
@@ -153,11 +153,11 @@ function OptionCard({ opt, idx, playersById }) {
         </div>
       </div>
       <div className="mt-4 grid grid-cols-2 gap-3">
-        <TeamList letter="A" ids={opt.team_a} avg={opt.avg_elo_a} playersById={playersById} color="#CCFF00" />
-        <TeamList letter="B" ids={opt.team_b} avg={opt.avg_elo_b} playersById={playersById} color="#007AFF" />
+        <TeamList letter="A" ids={opt.team_a} avg={opt.avg_skill_a} playersById={playersById} color="#CCFF00" />
+        <TeamList letter="B" ids={opt.team_b} avg={opt.avg_skill_b} playersById={playersById} color="#007AFF" />
       </div>
       <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-[#aaa]">
-        <Tag k="ΔELO" v={opt.elo_diff} />
+        <Tag k="ΔSkill" v={opt.skill_diff} />
         <Tag k="Δ Win%" v={`${opt.win_rate_diff}`} />
         <Tag k="Δ GD" v={opt.goal_diff_diff} />
         <Tag k="P(A win)" v={`${opt.predicted_win_prob_a}%`} />
@@ -171,7 +171,7 @@ function TeamList({ letter, ids, avg, playersById, color }) {
     <div>
       <div className="flex items-baseline justify-between">
         <div className="label-overline" style={{ color }}>Team {letter}</div>
-        <span className="font-mono text-xs text-[#888]">ELO {avg}</span>
+        <span className="font-mono text-xs text-[#888]">Skill {avg}</span>
       </div>
       <ul className="mt-2 space-y-1">
         {ids.map((id) => (
