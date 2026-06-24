@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, apiError } from "@/lib/api";
 import { toast } from "sonner";
-import { X, Plus, Shuffle, History } from "lucide-react";
+import { X, Plus, Sparkles, History } from "lucide-react";
 
 const TEAM_SIZE = 5;
 
@@ -20,7 +20,7 @@ export default function MatchForm() {
   const [scoreA, setScoreA] = useState(0);
   const [scoreB, setScoreB] = useState(0);
   const [submitting, setSubmitting] = useState(false);
-  const [balancing, setBalancing] = useState(false);
+  const [loadingNext, setLoadingNext] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -73,22 +73,23 @@ export default function MatchForm() {
     else setTeamB(teamB.filter((x) => x !== pid));
   };
 
-  // Action: équilibrer la sélection actuelle (teamA ∪ teamB) via le générateur
-  const balanceSelection = async () => {
-    const ids = [...teamA, ...teamB];
-    if (ids.length < 2) return toast.error("Sélectionnez d'abord les joueurs présents");
-    if (ids.length % 2 !== 0) return toast.error("Nombre pair de joueurs requis pour équilibrer");
-    setBalancing(true);
+  // Action: charger la "Prochaine compo" actuellement définie
+  const loadNextLineup = async () => {
+    setLoadingNext(true);
     try {
-      const { data } = await api.post("/team-generator", { player_ids: ids });
-      const best = data.options.find((o) => o.strategy === "best") || data.options[0];
-      setTeamA(best.team_a);
-      setTeamB(best.team_b);
-      toast.success(`Équilibrage : ${best.balance_pct}% (Δskill ${best.skill_diff})`);
+      const { data } = await api.get("/next-lineup");
+      const a = data.team_a || [];
+      const b = data.team_b || [];
+      if (a.length === 0 && b.length === 0) {
+        return toast.error("Aucune prochaine compo définie");
+      }
+      setTeamA(a);
+      setTeamB(b);
+      toast.success("Prochaine compo chargée");
     } catch (e) {
       toast.error(apiError(e));
     } finally {
-      setBalancing(false);
+      setLoadingNext(false);
     }
   };
 
@@ -125,8 +126,6 @@ export default function MatchForm() {
 
   if (loading) return <div className="label-overline">Loading…</div>;
 
-  const totalSelected = teamA.length + teamB.length;
-
   return (
     <div className="space-y-6 fade-up" data-testid="match-form-page">
       <header className="flex items-end justify-between gap-4 flex-wrap">
@@ -148,12 +147,12 @@ export default function MatchForm() {
           </button>
           <button
             type="button"
-            onClick={balanceSelection}
-            disabled={balancing || totalSelected < 2 || totalSelected % 2 !== 0}
+            onClick={loadNextLineup}
+            disabled={loadingNext}
             className="btn-secondary flex items-center gap-2 text-sm"
-            data-testid="balance-selection-btn"
+            data-testid="load-next-lineup-btn"
           >
-            <Shuffle size={14} /> {balancing ? "Équilibrage…" : "Équilibrer la sélection"}
+            <Sparkles size={14} /> {loadingNext ? "Chargement…" : "Prochaine compo"}
           </button>
         </div>
       </header>
