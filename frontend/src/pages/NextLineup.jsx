@@ -77,14 +77,16 @@ export default function NextLineup() {
     load();
   }, []);
 
-  const avg = (ids) => {
-    if (!ids?.length) return 0;
-    const sum = ids.reduce((acc, id) => acc + (stats[id]?.trueskill ?? 0), 0);
-    return sum / ids.length;
-  };
-
-  const avgA = useMemo(() => avg(data?.team_a), [data, stats]);
-  const avgB = useMemo(() => avg(data?.team_b), [data, stats]);
+  const avgA = useMemo(() => {
+    const ids = data?.team_a || [];
+    if (!ids.length) return 0;
+    return ids.reduce((acc, id) => acc + (stats[id]?.trueskill ?? 0), 0) / ids.length;
+  }, [data, stats]);
+  const avgB = useMemo(() => {
+    const ids = data?.team_b || [];
+    if (!ids.length) return 0;
+    return ids.reduce((acc, id) => acc + (stats[id]?.trueskill ?? 0), 0) / ids.length;
+  }, [data, stats]);
   const diff = Math.abs(avgA - avgB);
   const balancePct = Math.max(0, Math.min(100, 100 - (diff / 15) * 100));
 
@@ -97,7 +99,9 @@ export default function NextLineup() {
         await navigator.clipboard.writeText(url);
         toast.success("Lien copié dans le presse-papiers");
       }
-    } catch (_) {}
+    } catch (_) {
+      // user cancelled share or clipboard unavailable
+    }
   };
 
   if (loading) {

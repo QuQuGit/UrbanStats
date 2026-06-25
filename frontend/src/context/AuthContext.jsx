@@ -38,7 +38,9 @@ export function AuthProvider({ children }) {
   const logout = useCallback(async () => {
     try {
       await api.post("/auth/logout");
-    } catch (_) {}
+    } catch (_) {
+      // logout is stateless; ignore network errors
+    }
     setToken(null);
     setUser(null);
   }, []);
