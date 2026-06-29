@@ -111,12 +111,14 @@ class PlayerCreate(BaseModel):
 class PlayerUpdate(BaseModel):
     name: Optional[str] = None
     active: Optional[bool] = None
+    excluded: Optional[bool] = None
 
 
 class Player(BaseModel):
     id: str
     name: str
     active: bool = True
+    excluded: bool = False
     joined_at: datetime
 
 
@@ -188,6 +190,7 @@ async def list_players():
     docs = await db.players.find({}, {"_id": 0}).to_list(1000)
     for d in docs:
         d.pop("name_lc", None)
+        d.setdefault("excluded", False)
         if isinstance(d.get("joined_at"), str):
             d["joined_at"] = datetime.fromisoformat(d["joined_at"])
     docs.sort(key=lambda p: p["name"].lower())
@@ -209,6 +212,7 @@ async def create_player(payload: PlayerCreate, _: dict = Depends(require_admin))
         "name": name,
         "name_lc": name.lower(),
         "active": payload.active,
+        "excluded": False,
         "joined_at": now.isoformat(),
     }
     await db.players.insert_one(doc)
@@ -232,10 +236,13 @@ async def update_player(pid: str, payload: PlayerUpdate, _: dict = Depends(requi
         update["name_lc"] = new_name.lower()
     if payload.active is not None:
         update["active"] = payload.active
+    if payload.excluded is not None:
+        update["excluded"] = payload.excluded
     if update:
         await db.players.update_one({"id": pid}, {"$set": update})
     doc = await db.players.find_one({"id": pid}, {"_id": 0})
     doc.pop("name_lc", None)
+    doc.setdefault("excluded", False)
     if isinstance(doc.get("joined_at"), str):
         doc["joined_at"] = datetime.fromisoformat(doc["joined_at"])
     return doc
@@ -347,11 +354,12 @@ async def _load_all() -> tuple[List[dict], List[dict]]:
 async def stats_global():
     players, matches = await _load_all()
     total_goals = sum(m.get("score_a", 0) + m.get("score_b", 0) for m in matches)
-    active = sum(1 for p in players if p.get("active", True))
+    visible_players = [p for p in players if not p.get("excluded", False)]
+    active = sum(1 for p in visible_players if p.get("active", True))
     return {
         "total_matches": len(matches),
         "total_goals": total_goals,
-        "total_players": len(players),
+        "total_players": len(visible_players),
         "active_players": active,
     }
 
@@ -363,6 +371,8 @@ async def stats_players(min_matches: int = 0):
     stats = result["players"]
     out = []
     for p in players:
+        if p.get("excluded", False):
+            continue
         pid = p["id"]
         s = stats.get(pid, {
             "player_id": pid, "matches_played": 0, "wins": 0, "draws": 0, "losses": 0,

@@ -56,6 +56,16 @@ export default function Players() {
     }
   };
 
+  const toggleExcluded = async (p) => {
+    try {
+      await api.patch(`/players/${p.id}`, { excluded: !p.excluded });
+      toast.success(p.excluded ? `${p.name} réintégré aux stats` : `${p.name} exclu des stats`);
+      await load();
+    } catch (e) {
+      toast.error(apiError(e));
+    }
+  };
+
   const saveEdit = async (p) => {
     const name = editName.trim();
     if (!name) return;
@@ -159,6 +169,7 @@ export default function Players() {
             <tr className="text-left text-[#888]">
               <th className="px-4 py-3 font-medium">Nom</th>
               <th className="px-4 py-3 font-medium">État</th>
+              {isAdmin && <th className="px-4 py-3 font-medium text-center">Exclu</th>}
               <th className="px-4 py-3 font-medium text-right">M.</th>
               <th className="px-4 py-3 font-medium text-right">V</th>
               <th className="px-4 py-3 font-medium text-right">N</th>
@@ -171,12 +182,12 @@ export default function Players() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={isAdmin ? 10 : 9} className="px-4 py-6 text-center text-[#888]">Loading…</td></tr>
+              <tr><td colSpan={isAdmin ? 11 : 9} className="px-4 py-6 text-center text-[#888]">Loading…</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={isAdmin ? 10 : 9} className="px-4 py-6 text-center text-[#888]">Aucun joueur.</td></tr>
+              <tr><td colSpan={isAdmin ? 11 : 9} className="px-4 py-6 text-center text-[#888]">Aucun joueur.</td></tr>
             ) : (
               filtered.map((p) => (
-                <tr key={p.id} className="border-t border-[#222] hover:bg-[#1a1a1a]" data-testid={`player-row-${p.id}`}>
+                <tr key={p.id} className={`border-t border-[#222] hover:bg-[#1a1a1a] ${p.excluded ? "opacity-50" : ""}`} data-testid={`player-row-${p.id}`}>
                   <td className="px-4 py-3">
                     {editId === p.id ? (
                       <div className="flex gap-1 items-center">
@@ -207,6 +218,18 @@ export default function Players() {
                       </span>
                     )}
                   </td>
+                  {isAdmin && (
+                    <td className="px-4 py-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked={!!p.excluded}
+                        onChange={() => toggleExcluded(p)}
+                        className="h-4 w-4 accent-[#FF6B5C] cursor-pointer"
+                        title={p.excluded ? "Exclu des statistiques (clic pour réintégrer)" : "Inclus dans les statistiques (clic pour exclure)"}
+                        data-testid={`toggle-excluded-${p.id}`}
+                      />
+                    </td>
+                  )}
                   <td className="px-4 py-3 text-right font-mono">{p.matches_played ?? 0}</td>
                   <td className="px-4 py-3 text-right font-mono">{p.wins ?? 0}</td>
                   <td className="px-4 py-3 text-right font-mono">{p.draws ?? 0}</td>
