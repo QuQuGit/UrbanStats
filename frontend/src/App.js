@@ -12,6 +12,7 @@ import TeamGenerator from "@/pages/TeamGenerator";
 import PlayerProfile from "@/pages/PlayerProfile";
 import NextLineup from "@/pages/NextLineup";
 import NextLineupEdit from "@/pages/NextLineupEdit";
+import Podium from "@/pages/Podium";
 import { Toaster } from "sonner";
 
 export default function App() {
@@ -27,6 +28,7 @@ export default function App() {
             <Route path="matches" element={<Matches />} />
             <Route path="generator" element={<TeamGenerator />} />
             <Route path="next" element={<NextLineup />} />
+            <Route path="podium" element={<Podium />} />
             <Route
               path="next/edit"
               element={<AdminRoute><NextLineupEdit /></AdminRoute>}

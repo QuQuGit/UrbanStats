@@ -128,6 +128,7 @@ class MatchCreate(BaseModel):
     team_b: List[str]
     score_a: int
     score_b: int
+    match_number: Optional[int] = None
 
 
 class MatchUpdate(BaseModel):
@@ -136,6 +137,7 @@ class MatchUpdate(BaseModel):
     team_b: Optional[List[str]] = None
     score_a: Optional[int] = None
     score_b: Optional[int] = None
+    match_number: Optional[int] = None
 
 
 class TeamGenInput(BaseModel):
@@ -305,6 +307,7 @@ async def create_match(payload: MatchCreate, _: dict = Depends(require_admin)):
         "team_b": payload.team_b,
         "score_a": payload.score_a,
         "score_b": payload.score_b,
+        "match_number": payload.match_number,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.matches.insert_one(doc)
@@ -328,6 +331,7 @@ async def update_match(mid: str, payload: MatchUpdate, _: dict = Depends(require
         "team_b": merged["team_b"],
         "score_a": merged["score_a"],
         "score_b": merged["score_b"],
+        "match_number": merged.get("match_number"),
     }})
     doc = await db.matches.find_one({"id": mid}, {"_id": 0})
     return doc
@@ -439,10 +443,71 @@ async def team_generator(payload: TeamGenInput):
     result = replay_matches(matches)
     stats = result["players"]
     ratings = result["ratings"]
+    teammate_stats = result["teammate_stats"]
     options = []
-    for strat in ("best", "competitive", "random_fair"):
-        options.append(generate_balanced_teams(payload.player_ids, stats, ratings_lookup=ratings, strategy=strat))
+    for strat in ("best", "competitive", "least_together"):
+        options.append(generate_balanced_teams(
+            payload.player_ids, stats,
+            ratings_lookup=ratings,
+            teammate_stats_lookup=teammate_stats,
+            strategy=strat,
+        ))
     return {"options": options}
+
+
+# ---------------------------------------------------------------------------
+# Podium (last N days)
+# ---------------------------------------------------------------------------
+@api.get("/stats/podium")
+async def stats_podium(days: int = 30, min_matches: int = 2):
+    """Podium over a rolling window of N days. Public endpoint."""
+    players, matches = await _load_all()
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).date().isoformat()
+    recent = [m for m in matches if str(m.get("date", "")) >= cutoff]
+    result = replay_matches(recent)
+    stats = result["players"]
+
+    name_by_id = {p["id"]: p["name"] for p in players}
+    excluded_ids = {p["id"] for p in players if p.get("excluded", False)}
+
+    rows = []
+    for pid, s in stats.items():
+        if pid in excluded_ids:
+            continue
+        if s["matches_played"] < min_matches:
+            continue
+        rows.append({
+            "player_id": pid,
+            "name": name_by_id.get(pid, "?"),
+            "matches_played": s["matches_played"],
+            "wins": s["wins"],
+            "draws": s["draws"],
+            "losses": s["losses"],
+            "win_rate": s["win_rate"],
+            "goal_diff": s["goal_diff"],
+            "points": s["points"],
+            "trueskill_change": round(s["trueskill"] - INITIAL_SKILL, 2),
+            "trueskill": s["trueskill"],
+        })
+
+    def top3(key, reverse=True):
+        arr = sorted(rows, key=lambda r: r[key], reverse=reverse)
+        return arr[:3]
+
+    return {
+        "period_start": cutoff,
+        "period_end": datetime.now(timezone.utc).date().isoformat(),
+        "days": days,
+        "min_matches": min_matches,
+        "matches_count": len(recent),
+        "eligible_count": len(rows),
+        "podiums": {
+            "win_rate": top3("win_rate"),
+            "points": top3("points"),
+            "goal_diff": top3("goal_diff"),
+            "trueskill_change": top3("trueskill_change"),
+        },
+    }
 
 
 # ---------------------------------------------------------------------------

@@ -15,6 +15,7 @@ export default function MatchForm() {
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [matchNumber, setMatchNumber] = useState("");
   const [teamA, setTeamA] = useState([]);
   const [teamB, setTeamB] = useState([]);
   const [scoreA, setScoreA] = useState(0);
@@ -36,6 +37,7 @@ export default function MatchForm() {
             return;
           }
           setDate(match.date);
+          setMatchNumber(match.match_number ? String(match.match_number) : "");
           setTeamA(match.team_a);
           setTeamB(match.team_b);
           setScoreA(match.score_a);
@@ -108,7 +110,14 @@ export default function MatchForm() {
     if (!date) return toast.error("Date requise");
     setSubmitting(true);
     try {
-      const payload = { date, team_a: teamA, team_b: teamB, score_a: Number(scoreA), score_b: Number(scoreB) };
+      const payload = {
+        date,
+        team_a: teamA,
+        team_b: teamB,
+        score_a: Number(scoreA),
+        score_b: Number(scoreB),
+        match_number: matchNumber ? Number(matchNumber) : null,
+      };
       if (isEdit) {
         await api.patch(`/matches/${id}`, payload);
         toast.success("Match mis à jour");
@@ -182,7 +191,7 @@ export default function MatchForm() {
         />
       </div>
 
-      <div className="card-surface p-6 grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+      <div className="card-surface p-6 grid grid-cols-2 sm:grid-cols-4 gap-4 items-end">
         <div>
           <div className="label-overline mb-2">Date</div>
           <input
@@ -192,6 +201,19 @@ export default function MatchForm() {
             className="bg-[#0a0a0a] border border-[#222] rounded-md px-3 py-2 text-sm focus:outline-none focus:border-[#CCFF00] w-full"
             data-testid="match-date-input"
           />
+        </div>
+        <div>
+          <div className="label-overline mb-2">N° du match</div>
+          <input
+            type="number"
+            min={1}
+            value={matchNumber}
+            onChange={(e) => setMatchNumber(e.target.value)}
+            placeholder="1, 2, 3…"
+            className="bg-[#0a0a0a] border border-[#222] rounded-md px-3 py-2 text-sm focus:outline-none focus:border-[#CCFF00] w-full"
+            data-testid="match-number-input"
+          />
+          <div className="text-[10px] text-[#666] mt-1">Le n°1 compte ×2</div>
         </div>
         <div className="text-center">
           <div className="label-overline mb-2">Résumé</div>

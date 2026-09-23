@@ -104,6 +104,20 @@ def replay_matches(matches: List[dict]) -> Dict[str, Any]:
         for p, r in zip(team_b, new_b):
             ratings[p] = r
 
+        # Match #1 of the evening counts double: apply the same update a second time
+        try:
+            match_num = int(m.get("match_number") or 0)
+        except (TypeError, ValueError):
+            match_num = 0
+        if match_num == 1:
+            ratings_a2 = [ratings[p] for p in team_a]
+            ratings_b2 = [ratings[p] for p in team_b]
+            new_a2, new_b2 = TS_ENV.rate([ratings_a2, ratings_b2], ranks=ranks)
+            for p, r in zip(team_a, new_a2):
+                ratings[p] = r
+            for p, r in zip(team_b, new_b2):
+                ratings[p] = r
+
         # Per-player updates
         for p in team_a:
             played[p] += 1
@@ -279,16 +293,14 @@ def worst_opponents_for(player_id: str, opponent_stats, min_against: int = 2, li
     return out[:limit]
 
 
-def generate_balanced_teams(available_player_ids: List[str], player_stats: Dict[str, Any], ratings_lookup: Dict[str, Any] = None, strategy: str = "best") -> Dict[str, Any]:
+def generate_balanced_teams(available_player_ids: List[str], player_stats: Dict[str, Any], ratings_lookup: Dict[str, Any] = None, teammate_stats_lookup: Dict[Tuple[str, str], Dict[str, int]] = None, strategy: str = "best") -> Dict[str, Any]:
     """Generate balanced teams (N vs N) using TrueSkill conservative ratings.
 
     Strategies:
       - 'best': minimize avg-skill difference
       - 'competitive': minimize diff while preferring higher overall avg skill
-      - 'random_fair': pick a random combo within top tier of best-balanced
+      - 'least_together': teams composed of players who have played together the LEAST
     """
-    import random
-
     n = len(available_player_ids)
     if n < 2 or n % 2 != 0:
         return {"error": "need an even number of players (>=2)"}
@@ -305,6 +317,12 @@ def generate_balanced_teams(available_player_ids: List[str], player_stats: Dict[
 
     def gd_of(pid: str) -> float:
         return float(player_stats.get(pid, {}).get("goal_diff", 0))
+
+    def together_count(a: str, b: str) -> int:
+        if not teammate_stats_lookup or a == b:
+            return 0
+        key = (a, b) if a < b else (b, a)
+        return int(teammate_stats_lookup.get(key, {}).get("together", 0))
 
     ids = available_player_ids
     all_combos = []
@@ -332,7 +350,10 @@ def generate_balanced_teams(available_player_ids: List[str], player_stats: Dict[
         gd_diff = abs(gd_a - gd_b)
         mp_diff = abs(mp_a - mp_b)
 
-        # Weight differs slightly to keep score on the same magnitude as skill
+        together_a = sum(together_count(a, b) for a, b in combinations(team_a, 2))
+        together_b = sum(together_count(a, b) for a, b in combinations(team_b, 2))
+        together_total = together_a + together_b
+
         score = skill_diff + wr_diff * 0.05 + gd_diff * 0.02 + mp_diff * 0.01
         all_combos.append({
             "team_a": team_a, "team_b": team_b,
@@ -341,6 +362,7 @@ def generate_balanced_teams(available_player_ids: List[str], player_stats: Dict[
             "wr_diff": round(wr_diff, 1),
             "gd_diff": gd_diff,
             "mp_diff": mp_diff,
+            "together_total": together_total,
             "score": round(score, 3),
         })
 
@@ -353,10 +375,10 @@ def generate_balanced_teams(available_player_ids: List[str], player_stats: Dict[
     elif strategy == "competitive":
         all_combos.sort(key=lambda x: (x["skill_diff"], -(x["avg_a"] + x["avg_b"])))
         pick = all_combos[0]
-    elif strategy == "random_fair":
-        all_combos.sort(key=lambda x: x["score"])
-        top = all_combos[: max(10, len(all_combos) // 20)]
-        pick = random.choice(top)
+    elif strategy == "least_together":
+        # Primary: fewest total pairwise "together matches". Tie-break by skill balance.
+        all_combos.sort(key=lambda x: (x["together_total"], x["skill_diff"]))
+        pick = all_combos[0]
     else:
         all_combos.sort(key=lambda x: x["score"])
         pick = all_combos[0]
@@ -382,6 +404,7 @@ def generate_balanced_teams(available_player_ids: List[str], player_stats: Dict[
         "win_rate_diff": pick["wr_diff"],
         "goal_diff_diff": pick["gd_diff"],
         "matches_played_diff": pick["mp_diff"],
+        "together_total": pick["together_total"],
         "balance_pct": round(balance_pct, 1),
         "predicted_win_prob_a": round(predicted_a * 100, 1),
     }
