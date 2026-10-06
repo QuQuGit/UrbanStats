@@ -38,6 +38,10 @@ export default function PlayerProfile() {
 
   const { player, stats, best_teammates, tough_opponents, matches } = data;
 
+  const trueskillChangeByMatch = Object.fromEntries(
+    (stats.trueskill_history || []).map((h) => [h.match_id, h.change])
+  );
+
   const eloSeries = (stats.trueskill_history || []).map((h, idx) => ({
     idx: idx + 1,
     date: h.date,
@@ -190,7 +194,8 @@ export default function PlayerProfile() {
               const opp = inA ? m.score_b : m.score_a;
               const res = own > opp ? "V" : own < opp ? "D" : "N";
               const color = res === "V" ? "#CCFF00" : res === "D" ? "#FF3B30" : "#888";
-              const matchPoints = res === "V" ? 3 : res === "N" ? 1 : 0;
+              const skillChange = trueskillChangeByMatch[m.id];
+              const scColor = skillChange > 0 ? "#CCFF00" : skillChange < 0 ? "#FF3B30" : "#888";
               return (
                 <li key={m.id} className="py-3 flex items-center gap-4" data-testid={`profile-match-row-${m.id}`}>
                   <span className="font-mono text-xs text-[#888] w-20">{m.date}</span>
@@ -199,13 +204,15 @@ export default function PlayerProfile() {
                   <span className="text-[#888] text-sm truncate flex-1">
                     vs {(inA ? m.team_b : m.team_a).map((pid) => players[pid]?.name || "?").join(", ")}
                   </span>
-                  <span
-                    className="font-mono text-xs font-bold shrink-0 px-2 py-1 rounded"
-                    style={{ color, background: `${color}1a` }}
-                    data-testid={`profile-match-points-${m.id}`}
-                  >
-                    +{matchPoints} pt{matchPoints > 1 ? "s" : ""}
-                  </span>
+                  {skillChange !== undefined && (
+                    <span
+                      className="font-mono text-xs font-bold shrink-0 px-2 py-1 rounded"
+                      style={{ color: scColor, background: `${scColor}1a` }}
+                      data-testid={`profile-match-skill-change-${m.id}`}
+                    >
+                      {skillChange > 0 ? "+" : ""}{skillChange} skill
+                    </span>
+                  )}
                 </li>
               );
             })}

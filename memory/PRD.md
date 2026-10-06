@@ -55,7 +55,7 @@ duo/trio, MVP, nemesis), import wizard, future enhancements.
 - **P3** Vite migration (CRA deprecated, currently pinned to Node 20 via .nvmrc for Vercel compat)
 
 ## Session Update (2026-10-06, part 2)
-- PlayerProfile: match history list now shows points gained per match (+3 win / +1 draw / +0 loss) next to each match row (`data-testid="profile-match-points-{match_id}"`).
+- PlayerProfile: match history list now shows the **TrueSkill points gained/lost per match** (not classification points) next to each match row — e.g. "+2.61 skill" / "-1.92 skill", colored green/red (`data-testid="profile-match-skill-change-{match_id}"`). Backend: `stats.py` `replay_matches()` now stores a `change` field (delta vs pre-match skill) in each `trueskill_history` entry; frontend maps `match_id` → `change`.
 - Backend: added `GET /api/health` (public, lightweight) for external uptime pinging.
 - User confirmed: will set up an external free uptime service (UptimeRobot/cron-job.org) to ping `/api/health` every 10 min and keep the Render free-tier backend from sleeping. Emergent's own `.emergent/crons.yml` cron system cannot target the external Render URL, so it was not used here.
 - Dashboard: added "Pts ±" and "Pos ±" columns showing points/ranking delta since the last distinct match date ("journée"), not match_number (multiple matches can happen same day). Backend: `_rank_by_trueskill()` helper + delta logic in `GET /api/stats/players` (server.py). Values are `null` (shown as "–") if there's no previous journée to compare against.

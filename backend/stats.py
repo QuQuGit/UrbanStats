@@ -142,7 +142,7 @@ def replay_matches(matches: List[dict]) -> Dict[str, Any]:
             skill_now = _expose(ratings[p])
             highest[p] = max(highest[p], skill_now)
             lowest[p] = min(lowest[p], skill_now)
-            skill_history[p].append({"match_id": match_id, "date": match_date, "skill": round(skill_now, 2)})
+            skill_history[p].append({"match_id": match_id, "date": match_date, "skill": round(skill_now, 2), "change": round(skill_now - before_skill[p], 2)})
             skill_change_history[p].append(skill_now - before_skill[p])
 
         for p in team_b:
@@ -168,7 +168,7 @@ def replay_matches(matches: List[dict]) -> Dict[str, Any]:
             skill_now = _expose(ratings[p])
             highest[p] = max(highest[p], skill_now)
             lowest[p] = min(lowest[p], skill_now)
-            skill_history[p].append({"match_id": match_id, "date": match_date, "skill": round(skill_now, 2)})
+            skill_history[p].append({"match_id": match_id, "date": match_date, "skill": round(skill_now, 2), "change": round(skill_now - before_skill[p], 2)})
             skill_change_history[p].append(skill_now - before_skill[p])
 
         # teammate / opponent aggregates
