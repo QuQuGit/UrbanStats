@@ -355,6 +355,11 @@ async def _load_all() -> tuple[List[dict], List[dict]]:
     return players, matches
 
 
+@api.get("/health")
+async def health_check():
+    return {"status": "ok", "time": datetime.now(timezone.utc).isoformat()}
+
+
 @api.get("/stats/global")
 async def stats_global():
     players, matches = await _load_all()

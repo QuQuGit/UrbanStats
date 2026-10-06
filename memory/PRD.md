@@ -54,7 +54,10 @@ duo/trio, MVP, nemesis), import wizard, future enhancements.
 - **P3** Mobile PWA
 - **P3** Vite migration (CRA deprecated, currently pinned to Node 20 via .nvmrc for Vercel compat)
 
-## Session Update (2026-10-06)
+## Session Update (2026-10-06, part 2)
+- PlayerProfile: match history list now shows points gained per match (+3 win / +1 draw / +0 loss) next to each match row (`data-testid="profile-match-points-{match_id}"`).
+- Backend: added `GET /api/health` (public, lightweight) for external uptime pinging.
+- User confirmed: will set up an external free uptime service (UptimeRobot/cron-job.org) to ping `/api/health` every 10 min and keep the Render free-tier backend from sleeping. Emergent's own `.emergent/crons.yml` cron system cannot target the external Render URL, so it was not used here.
 - Dashboard: added "Pts ±" and "Pos ±" columns showing points/ranking delta since the last distinct match date ("journée"), not match_number (multiple matches can happen same day). Backend: `_rank_by_trueskill()` helper + delta logic in `GET /api/stats/players` (server.py). Values are `null` (shown as "–") if there's no previous journée to compare against.
 - Podium: added "Meilleur duo" card — best teammate pair by win-rate when playing together, within the selected rolling window. Backend: `best_duos()` in stats.py, wired into `GET /api/stats/podium` → `podiums.best_duo`. Added a "365 jours" option to the Podium date-range select for visibility with older seed data.
 - Tested via testing_agent (iteration_5.json): 100% pass, no regressions on existing Dashboard sort/stats or other Podium categories.

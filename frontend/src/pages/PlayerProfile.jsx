@@ -190,13 +190,21 @@ export default function PlayerProfile() {
               const opp = inA ? m.score_b : m.score_a;
               const res = own > opp ? "V" : own < opp ? "D" : "N";
               const color = res === "V" ? "#CCFF00" : res === "D" ? "#FF3B30" : "#888";
+              const matchPoints = res === "V" ? 3 : res === "N" ? 1 : 0;
               return (
-                <li key={m.id} className="py-3 flex items-center gap-4">
+                <li key={m.id} className="py-3 flex items-center gap-4" data-testid={`profile-match-row-${m.id}`}>
                   <span className="font-mono text-xs text-[#888] w-20">{m.date}</span>
                   <span className="font-mono font-bold w-8 text-center" style={{ color }}>{res}</span>
                   <span className="font-mono text-lg font-bold">{own} · {opp}</span>
-                  <span className="text-[#888] text-sm truncate">
+                  <span className="text-[#888] text-sm truncate flex-1">
                     vs {(inA ? m.team_b : m.team_a).map((pid) => players[pid]?.name || "?").join(", ")}
+                  </span>
+                  <span
+                    className="font-mono text-xs font-bold shrink-0 px-2 py-1 rounded"
+                    style={{ color, background: `${color}1a` }}
+                    data-testid={`profile-match-points-${m.id}`}
+                  >
+                    +{matchPoints} pt{matchPoints > 1 ? "s" : ""}
                   </span>
                 </li>
               );
