@@ -58,6 +58,7 @@ export default function Podium() {
             <option value={30}>30 jours</option>
             <option value={60}>60 jours</option>
             <option value={90}>90 jours</option>
+            <option value={365}>365 jours</option>
           </select>
         </div>
       </header>

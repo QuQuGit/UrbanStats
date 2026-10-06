@@ -8,11 +8,11 @@ team generator and player profiles with charts. Original spec also lists analyti
 duo/trio, MVP, nemesis), import wizard, future enhancements.
 
 ## User Choices (locked-in by user)
-- Stack: FastAPI + MongoDB (in lieu of Node/Postgres)
-- Auth: Emergent-managed Google Auth
-- Import: not needed in MVP (CSV exists only as a reference for the agent)
-- Scope: Core MVP (joueurs, matches, stats, ELO, dashboard) — analytics & import deferred
-- Theme: dark + simple
+- Stack: FastAPI + MongoDB
+- Auth: Classic Email/Password JWT (admin-only writes, public reads)
+- Rating system: TrueSkill (replaced ELO)
+- Theme: dark + simple, Volt Green accent #CCFF00
+- Language: French (fr-FR)
 
 ## Architecture
 - **Backend** (`/app/backend`)
@@ -45,10 +45,16 @@ duo/trio, MVP, nemesis), import wizard, future enhancements.
 
 ## Backlog
 - **P1** Import wizard (CSV/XLSX → players + matches replay)
-- **P1** Best Duo / Best Trio / Nemesis ranking pages (data layer already aggregates teammate & opponent stats)
+- **P1** Best Trio / Nemesis ranking pages (Best Duo done — see Session Update 2026-10-06)
 - **P1** MVP composite ranking
 - **P2** Configurable min matches threshold in rankings
-- **P2** Win-rate evolution chart, goal-diff evolution chart
+- **P2** Win-rate evolution chart, goal-diff evolution chart (TrueSkill evolution chart already exists on PlayerProfile)
 - **P2** Seasons / championships
 - **P3** Individual goals/assists/goalkeepers (architecture future-proof: only team compositions + score persisted today)
 - **P3** Mobile PWA
+- **P3** Vite migration (CRA deprecated, currently pinned to Node 20 via .nvmrc for Vercel compat)
+
+## Session Update (2026-10-06)
+- Dashboard: added "Pts ±" and "Pos ±" columns showing points/ranking delta since the last distinct match date ("journée"), not match_number (multiple matches can happen same day). Backend: `_rank_by_trueskill()` helper + delta logic in `GET /api/stats/players` (server.py). Values are `null` (shown as "–") if there's no previous journée to compare against.
+- Podium: added "Meilleur duo" card — best teammate pair by win-rate when playing together, within the selected rolling window. Backend: `best_duos()` in stats.py, wired into `GET /api/stats/podium` → `podiums.best_duo`. Added a "365 jours" option to the Podium date-range select for visibility with older seed data.
+- Tested via testing_agent (iteration_5.json): 100% pass, no regressions on existing Dashboard sort/stats or other Podium categories.
