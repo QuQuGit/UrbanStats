@@ -29,6 +29,7 @@ from stats import (
     generate_balanced_teams,
     best_teammates_for,
     worst_opponents_for,
+    best_duos,
 )
 
 ROOT_DIR = Path(__file__).parent
@@ -368,11 +369,40 @@ async def stats_global():
     }
 
 
+def _rank_by_trueskill(visible_players: List[dict], stats_dict: dict) -> dict:
+    order = sorted(
+        visible_players,
+        key=lambda p: (-float(stats_dict.get(p["id"], {}).get("trueskill", INITIAL_SKILL)), p["id"]),
+    )
+    return {p["id"]: idx + 1 for idx, p in enumerate(order)}
+
+
 @api.get("/stats/players")
 async def stats_players(min_matches: int = 0):
     players, matches = await _load_all()
     result = replay_matches(matches)
     stats = result["players"]
+    visible_players = [p for p in players if not p.get("excluded", False)]
+
+    # Points / ranking delta since the last "journée" (distinct match date, not match count).
+    dates = sorted({str(m.get("date")) for m in matches if m.get("date")})
+    last_date = dates[-1] if dates else None
+    prev_dates = [d for d in dates if d < last_date] if last_date else []
+    has_previous = len(prev_dates) > 0
+
+    points_delta_map, rank_delta_map = {}, {}
+    if has_previous:
+        prev_matches = [m for m in matches if str(m.get("date", "")) < last_date]
+        prev_stats = replay_matches(prev_matches)["players"]
+        current_rank = _rank_by_trueskill(visible_players, stats)
+        prev_rank = _rank_by_trueskill(visible_players, prev_stats)
+        for p in visible_players:
+            pid = p["id"]
+            cur_pts = stats.get(pid, {}).get("points", 0)
+            prev_pts = prev_stats.get(pid, {}).get("points", 0)
+            points_delta_map[pid] = cur_pts - prev_pts
+            rank_delta_map[pid] = prev_rank[pid] - current_rank[pid]
+
     out = []
     for p in players:
         if p.get("excluded", False):
@@ -391,6 +421,8 @@ async def stats_players(min_matches: int = 0):
             continue
         s = {**s, "name": p["name"], "active": p.get("active", True)}
         s.pop("trueskill_history", None)
+        s["points_delta"] = points_delta_map.get(pid) if has_previous else None
+        s["rank_delta"] = rank_delta_map.get(pid) if has_previous else None
         out.append(s)
     return out
 
@@ -494,6 +526,12 @@ async def stats_podium(days: int = 30, min_matches: int = 2):
         arr = sorted(rows, key=lambda r: r[key], reverse=reverse)
         return arr[:3]
 
+    duos = best_duos(result["teammate_stats"], min_together=min_matches, limit=3)
+    duos = [d for d in duos if d["player_a"] not in excluded_ids and d["player_b"] not in excluded_ids]
+    for d in duos:
+        d["player_a_name"] = name_by_id.get(d["player_a"], "?")
+        d["player_b_name"] = name_by_id.get(d["player_b"], "?")
+
     return {
         "period_start": cutoff,
         "period_end": datetime.now(timezone.utc).date().isoformat(),
@@ -506,6 +544,7 @@ async def stats_podium(days: int = 30, min_matches: int = 2):
             "points": top3("points"),
             "goal_diff": top3("goal_diff"),
             "trueskill_change": top3("trueskill_change"),
+            "best_duo": duos,
         },
     }
 

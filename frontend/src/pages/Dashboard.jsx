@@ -16,6 +16,8 @@ const COLUMNS = [
   { key: "goal_diff", label: "GD", className: "text-right w-14" },
   { key: "points", label: "Pts", className: "text-right w-14" },
   { key: "trueskill", label: "Skill", className: "text-right w-20" },
+  { key: "points_delta", label: "Pts ±", className: "text-right w-16" },
+  { key: "rank_delta", label: "Pos ±", className: "text-right w-16" },
 ];
 
 export default function Dashboard() {
@@ -67,6 +69,11 @@ export default function Dashboard() {
     setSort((s) => (s.key === key ? { key, dir: -s.dir } : { key, dir: key === "name" ? 1 : -1 }));
   };
 
+  const lastJournee = useMemo(() => {
+    const dates = [...new Set(matches.map((m) => m.date).filter(Boolean))].sort();
+    return dates.length ? dates[dates.length - 1] : null;
+  }, [matches]);
+
   if (loading) return <div className="label-overline">Loading…</div>;
 
   return (
@@ -104,9 +111,14 @@ export default function Dashboard() {
               <div className="label-overline">Ranking</div>
               <h2 className="font-display text-2xl tracking-tight font-bold">Classement complet · TrueSkill</h2>
             </div>
-            <div className="text-xs text-[#666]">
-              {ranked.length} joueur{ranked.length > 1 ? "s" : ""} · tri par&nbsp;
-              <span className="text-white">{COLUMNS.find((c) => c.key === sort.key)?.label || sort.key}</span>
+            <div className="text-xs text-[#666] text-right">
+              <div>
+                {ranked.length} joueur{ranked.length > 1 ? "s" : ""} · tri par&nbsp;
+                <span className="text-white">{COLUMNS.find((c) => c.key === sort.key)?.label || sort.key}</span>
+              </div>
+              {lastJournee && (
+                <div data-testid="last-journee-note">Pts ± / Pos ± depuis la journée du {lastJournee}</div>
+              )}
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -150,6 +162,12 @@ export default function Dashboard() {
                     <td className="px-3 py-2 text-right font-mono font-bold text-[#CCFF00]">
                       {p.trueskill?.toFixed(2)}
                     </td>
+                    <td className="px-3 py-2 text-right font-mono" data-testid={`points-delta-${p.player_id}`}>
+                      <DeltaBadge value={p.points_delta} />
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono" data-testid={`rank-delta-${p.player_id}`}>
+                      <DeltaBadge value={p.rank_delta} />
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -179,6 +197,22 @@ export default function Dashboard() {
         )}
       </section>
     </div>
+  );
+}
+
+function DeltaBadge({ value }) {
+  if (value === null || value === undefined) {
+    return <span className="text-[#555]">–</span>;
+  }
+  if (value === 0) {
+    return <span className="text-[#888]">0</span>;
+  }
+  const positive = value > 0;
+  return (
+    <span className={`inline-flex items-center justify-end gap-0.5 font-bold ${positive ? "text-[#CCFF00]" : "text-[#FF3B30]"}`}>
+      {positive ? <ArrowUp size={11} /> : <ArrowDown size={11} />}
+      {Math.abs(value)}
+    </span>
   );
 }
 

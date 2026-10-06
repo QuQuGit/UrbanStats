@@ -276,6 +276,21 @@ def best_teammates_for(player_id: str, teammate_stats, min_together: int = 2, li
     return out[:limit]
 
 
+def best_duos(teammate_stats, min_together: int = 2, limit: int = 3):
+    out = []
+    for (a, b), s in teammate_stats.items():
+        if s["together"] < min_together:
+            continue
+        wr = s["wins"] / s["together"] * 100
+        out.append({
+            "player_a": a, "player_b": b, "together": s["together"],
+            "wins": s["wins"], "draws": s["draws"], "losses": s["losses"],
+            "win_rate": round(wr, 1),
+        })
+    out.sort(key=lambda x: (-x["win_rate"], -x["together"]))
+    return out[:limit]
+
+
 def worst_opponents_for(player_id: str, opponent_stats, min_against: int = 2, limit: int = 5):
     out = []
     for (a, b), s in opponent_stats.items():

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, apiError } from "@/lib/api";
 import { toast } from "sonner";
-import { Trophy, Target, TrendingUp, Award, Calendar } from "lucide-react";
+import { Trophy, Target, TrendingUp, Award, Calendar, Users } from "lucide-react";
 
 const CATEGORIES = [
   { key: "win_rate", label: "Win Rate", unit: "%", icon: Trophy, color: "#CCFF00" },
@@ -78,10 +78,64 @@ export default function Podium() {
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+          <DuoPodiumCard rows={data.podiums.best_duo || []} />
           {CATEGORIES.map((cat) => (
             <PodiumCard key={cat.key} category={cat} rows={data.podiums[cat.key] || []} />
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+function DuoPodiumCard({ rows }) {
+  return (
+    <div className="card-surface p-5 fade-up lg:col-span-2" data-testid="podium-best_duo">
+      <div className="flex items-center gap-3 mb-4">
+        <div
+          className="h-9 w-9 rounded-lg grid place-items-center shrink-0"
+          style={{ background: "#FF2D9922", color: "#FF2D99" }}
+        >
+          <Users size={18} />
+        </div>
+        <div>
+          <div className="label-overline">Duo Ranking</div>
+          <h3 className="font-display text-xl font-bold tracking-tight">Meilleur duo</h3>
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="text-sm text-[#666] py-4 text-center">Pas assez de données.</div>
+      ) : (
+        <ul className="space-y-2">
+          {rows.map((r, idx) => (
+            <li
+              key={`${r.player_a}-${r.player_b}`}
+              className="flex items-center gap-3 bg-[#0a0a0a] border border-[#222] rounded-lg px-3 py-2.5"
+              data-testid={`podium-best_duo-rank-${idx + 1}`}
+            >
+              <span className="text-2xl leading-none w-8 text-center shrink-0" title={`#${idx + 1}`}>
+                {MEDALS[idx]}
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold truncate" style={{ color: idx === 0 ? MEDAL_COLORS[0] : "#fff" }}>
+                  <Link to={`/player/${r.player_a}`} className="hover:text-[#CCFF00]">{r.player_a_name}</Link>
+                  <span className="text-[#666] mx-1">&amp;</span>
+                  <Link to={`/player/${r.player_b}`} className="hover:text-[#CCFF00]">{r.player_b_name}</Link>
+                </div>
+                <div className="text-xs text-[#888] font-mono">
+                  {r.together} ensemble · {r.wins}V · {r.draws}N · {r.losses}D
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                <div className="font-mono text-xl font-black" style={{ color: "#FF2D99" }}>
+                  {r.win_rate}
+                  <span className="text-xs text-[#666] ml-0.5">%</span>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );
