@@ -54,7 +54,11 @@ duo/trio, MVP, nemesis), import wizard, future enhancements.
 - **P3** Mobile PWA
 - **P3** Vite migration (CRA deprecated, currently pinned to Node 20 via .nvmrc for Vercel compat)
 
-## Session Update (2026-10-06, part 3)
+## Session Update (2026-10-07) — Vercel Node 20 deprecation fix
+- Bug reported: Vercel build failing with "Node.js Version 20.x is discontinued... set to 24.x". Vercel deprecated Node 20 for builds (Oct 1, 2026), min supported now 22.x/24.x.
+- Fix: `frontend/.nvmrc` changed `20` → `24`; added `"engines": {"node": "24.x"}` to `frontend/package.json` (Vercel honors `engines.node` to override Project Settings on next deploy).
+- Verified CRA5/craco build compiles cleanly under both real Node 22.14.0 and Node 24.9.0 binaries (no ajv/ESLintWebpackPlugin errors that caused the original Node-20 pin) — confirmed independently by testing_agent (iteration_6.json). Local sandbox dev still runs on Node 20 (unaffected, only Vercel build process reads `.nvmrc`/`engines`).
+- No functional regressions found on Dashboard/Podium/PlayerProfile.
 - Dashboard: corrected the delta column — now shows **TrueSkill points gained/lost** since the last journée (renamed "Skill ±", backend field `skill_delta`), not classification points. Moved "Pos ±" (rank_delta) to sit right after the "#" rank column (col 2), before the player name.
 
 ## Session Update (2026-10-06, part 2)
