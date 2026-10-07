@@ -403,9 +403,9 @@ async def stats_players(min_matches: int = 0):
         prev_rank = _rank_by_trueskill(visible_players, prev_stats)
         for p in visible_players:
             pid = p["id"]
-            cur_pts = stats.get(pid, {}).get("points", 0)
-            prev_pts = prev_stats.get(pid, {}).get("points", 0)
-            points_delta_map[pid] = cur_pts - prev_pts
+            cur_skill = stats.get(pid, {}).get("trueskill", INITIAL_SKILL)
+            prev_skill = prev_stats.get(pid, {}).get("trueskill", INITIAL_SKILL)
+            points_delta_map[pid] = round(cur_skill - prev_skill, 2)
             rank_delta_map[pid] = prev_rank[pid] - current_rank[pid]
 
     out = []
@@ -426,7 +426,7 @@ async def stats_players(min_matches: int = 0):
             continue
         s = {**s, "name": p["name"], "active": p.get("active", True)}
         s.pop("trueskill_history", None)
-        s["points_delta"] = points_delta_map.get(pid) if has_previous else None
+        s["skill_delta"] = points_delta_map.get(pid) if has_previous else None
         s["rank_delta"] = rank_delta_map.get(pid) if has_previous else None
         out.append(s)
     return out

@@ -54,6 +54,9 @@ duo/trio, MVP, nemesis), import wizard, future enhancements.
 - **P3** Mobile PWA
 - **P3** Vite migration (CRA deprecated, currently pinned to Node 20 via .nvmrc for Vercel compat)
 
+## Session Update (2026-10-06, part 3)
+- Dashboard: corrected the delta column — now shows **TrueSkill points gained/lost** since the last journée (renamed "Skill ±", backend field `skill_delta`), not classification points. Moved "Pos ±" (rank_delta) to sit right after the "#" rank column (col 2), before the player name.
+
 ## Session Update (2026-10-06, part 2)
 - PlayerProfile: match history list now shows the **TrueSkill points gained/lost per match** (not classification points) next to each match row — e.g. "+2.61 skill" / "-1.92 skill", colored green/red (`data-testid="profile-match-skill-change-{match_id}"`). Backend: `stats.py` `replay_matches()` now stores a `change` field (delta vs pre-match skill) in each `trueskill_history` entry; frontend maps `match_id` → `change`.
 - Backend: added `GET /api/health` (public, lightweight) for external uptime pinging.

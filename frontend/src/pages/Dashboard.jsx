@@ -7,6 +7,7 @@ import { useAuth } from "@/context/AuthContext";
 
 const COLUMNS = [
   { key: "rank", label: "#", className: "w-10 text-center", sortable: false },
+  { key: "rank_delta", label: "Pos ±", className: "text-right w-16" },
   { key: "name", label: "Joueur", className: "" },
   { key: "matches_played", label: "M", className: "text-right w-12" },
   { key: "wins", label: "V", className: "text-right w-12" },
@@ -16,8 +17,7 @@ const COLUMNS = [
   { key: "goal_diff", label: "GD", className: "text-right w-14" },
   { key: "points", label: "Pts", className: "text-right w-14" },
   { key: "trueskill", label: "Skill", className: "text-right w-20" },
-  { key: "points_delta", label: "Pts ±", className: "text-right w-16" },
-  { key: "rank_delta", label: "Pos ±", className: "text-right w-16" },
+  { key: "skill_delta", label: "Skill ±", className: "text-right w-16" },
 ];
 
 export default function Dashboard() {
@@ -117,7 +117,7 @@ export default function Dashboard() {
                 <span className="text-white">{COLUMNS.find((c) => c.key === sort.key)?.label || sort.key}</span>
               </div>
               {lastJournee && (
-                <div data-testid="last-journee-note">Pts ± / Pos ± depuis la journée du {lastJournee}</div>
+                <div data-testid="last-journee-note">Skill ± / Pos ± depuis la journée du {lastJournee}</div>
               )}
             </div>
           </div>
@@ -144,6 +144,9 @@ export default function Dashboard() {
                 {ranked.map((p, idx) => (
                   <tr key={p.player_id} className="border-t border-[#222] hover:bg-[#1a1a1a]" data-testid={`rank-row-${p.player_id}`}>
                     <td className="px-3 py-2 text-center font-mono text-xs text-[#888]">{idx + 1}</td>
+                    <td className="px-3 py-2 text-right font-mono" data-testid={`rank-delta-${p.player_id}`}>
+                      <DeltaBadge value={p.rank_delta} />
+                    </td>
                     <td className="px-3 py-2">
                       <Link to={`/player/${p.player_id}`} className="hover:text-[#CCFF00] flex items-center gap-2">
                         <span className={`h-1.5 w-1.5 rounded-full ${p.active ? "bg-[#CCFF00]" : "bg-[#444]"}`} />
@@ -162,11 +165,8 @@ export default function Dashboard() {
                     <td className="px-3 py-2 text-right font-mono font-bold text-[#CCFF00]">
                       {p.trueskill?.toFixed(2)}
                     </td>
-                    <td className="px-3 py-2 text-right font-mono" data-testid={`points-delta-${p.player_id}`}>
-                      <DeltaBadge value={p.points_delta} />
-                    </td>
-                    <td className="px-3 py-2 text-right font-mono" data-testid={`rank-delta-${p.player_id}`}>
-                      <DeltaBadge value={p.rank_delta} />
+                    <td className="px-3 py-2 text-right font-mono" data-testid={`skill-delta-${p.player_id}`}>
+                      <DeltaBadge value={p.skill_delta} />
                     </td>
                   </tr>
                 ))}
